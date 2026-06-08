@@ -9,8 +9,10 @@ Given a job description:
 1. Select and reorder the most relevant existing bullets.
 2. Rephrase them using the job's terminology WITHOUT changing their meaning.
 3. List job requirements that are NOT supported by the master resume.
+4. Score how well the candidate's background matches the role on a scale of 0-100,
+   where 100 means every requirement is met and 0 means no overlap at all.
 Respond with ONLY valid JSON, no markdown fences, in exactly this shape:
-{"summary": string, "tailored_bullets": string[], "unmatched_requirements": string[]}`;
+{"score": number, "summary": string, "tailored_bullets": string[], "unmatched_requirements": string[]}`;
 
 export async function tailorResume(job) {
   if (!config.llm.apiKey) {

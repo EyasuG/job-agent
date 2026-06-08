@@ -23,7 +23,9 @@ export function getBot() {
 export async function sendJobNotification(job, tailored, resumePath) {
   const { chatId } = config.telegram;
 
-  let text = `*${escMd(job.title)}*\n${escMd(job.company)} — ${escMd(job.location)}`;
+  const score = tailored?.score;
+  const scoreBar = score != null ? ` — Match: ${score}/100` : "";
+  let text = `*${escMd(job.title)}*\n${escMd(job.company)} — ${escMd(job.location)}${escMd(scoreBar)}`;
 
   if (tailored?.unmatched_requirements?.length) {
     text += `\n\n_Gaps:_ ${tailored.unmatched_requirements.map(escMd).join(", ")}`;
