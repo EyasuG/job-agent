@@ -1,0 +1,23 @@
+{
+  "name": "job-agent",
+  "version": "1.0.0",
+  "description": "AI-powered job search agent: fetches postings, tailors a resume with Claude, and notifies via Telegram.",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "once": "node src/run-once.js",
+    "dev": "nodemon src/run-once.js"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.102.0",
+    "docx": "^9.7.1",
+    "dotenv": "^17.4.2",
+    "node-cron": "^4.2.1",
+    "p-limit": "^7.3.0"
+  }
+}

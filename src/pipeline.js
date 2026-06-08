@@ -1,0 +1,36 @@
+import { fetchJobs } from "./fetchers/jsearch.js";
+import { isNew, markSeen } from "./store/db.js";
+import { tailorResume } from "./tailor/tailor.js";
+import { renderResume } from "./tailor/render.js";
+import { sendMessage } from "./notify/telegram.js";
+import { logger } from "./lib/logger.js";
+
+export async function runOnce() {
+  logger.info("Fetching jobs...");
+  const jobs = await fetchJobs();
+  const fresh = jobs.filter((j) => j.id && isNew(j.id));
+  logger.info(`Found ${jobs.length} jobs, ${fresh.length} new.`);
+
+  for (const job of fresh) {
+    try {
+      const tailored = await tailorResume(job);
+
+      let note = `*${job.title}*\n${job.company} — ${job.location}\n${job.url}`;
+      if (tailored) {
+        const file = await renderResume(job, tailored);
+        note += `\n\nTailored resume: \`${file}\``;
+        if (tailored.unmatched_requirements?.length) {
+          note += `\n_Gaps:_ ${tailored.unmatched_requirements.join(", ")}`;
+        }
+      }
+
+      await sendMessage(note);
+      markSeen(job);
+      logger.info(`Notified: ${job.title} @ ${job.company}`);
+    } catch (err) {
+      logger.error(`Failed on job ${job.id}: ${err.message}`);
+    }
+  }
+
+  logger.info("Run complete.");
+}
