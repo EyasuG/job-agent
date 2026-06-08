@@ -1,0 +1,25 @@
+[Unit]
+Description=AI Job Search Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=YOUR_LINUX_USER
+WorkingDirectory=/home/YOUR_LINUX_USER/job-agent
+ExecStart=/usr/bin/node src/index.js
+
+# Load secrets from .env file
+EnvironmentFile=/home/YOUR_LINUX_USER/job-agent/.env
+
+# Restart on crash; wait 10s before retrying
+Restart=on-failure
+RestartSec=10
+
+# Log via journald (view with: journalctl -u job-agent -f)
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=job-agent
+
+[Install]
+WantedBy=multi-user.target

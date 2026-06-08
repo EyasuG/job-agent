@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+
+  <key>Label</key>
+  <string>com.jobagent</string>
+
+  <!-- The agent manages its own cron schedule internally via node-cron.
+       launchd just needs to keep the process alive. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>NODE_PATH_PLACEHOLDER</string>
+    <string>PROJECT_PATH_PLACEHOLDER/src/index.js</string>
+  </array>
+
+  <!-- Load the .env file by sourcing it as environment variables -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>NODE_ENV</key>
+    <string>production</string>
+  </dict>
+
+  <!-- Working directory so relative paths in config.js resolve correctly -->
+  <key>WorkingDirectory</key>
+  <string>PROJECT_PATH_PLACEHOLDER</string>
+
+  <!-- Restart automatically if the process crashes -->
+  <key>KeepAlive</key>
+  <true/>
+
+  <!-- Start when the user logs in -->
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- Log output -->
+  <key>StandardOutPath</key>
+  <string>PROJECT_PATH_PLACEHOLDER/logs/agent.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>PROJECT_PATH_PLACEHOLDER/logs/agent.error.log</string>
+
+</dict>
+</plist>

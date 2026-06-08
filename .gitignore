@@ -4,3 +4,4 @@ output/
 node_modules/
 resume/master.json
 .DS_Store
+logs/*.log
