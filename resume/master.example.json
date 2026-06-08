@@ -1,7 +1,12 @@
 {
   "name": "Your Name",
   "title": "JavaScript Software Engineer",
-  "contact": { "email": "you@example.com", "location": "Washington, DC" },
+  "contact": {
+    "email": "you@example.com",
+    "phone": "(555) 123-4567",
+    "location": "Washington, DC",
+    "linkedin": "linkedin.com/in/yourhandle"
+  },
   "summary": "Full-stack JavaScript engineer with experience across Node.js and React.",
   "experience": [
     {
@@ -15,5 +20,13 @@
       ]
     }
   ],
-  "skills": ["JavaScript", "TypeScript", "Node.js", "React", "SQLite", "REST APIs"]
+  "skills": ["JavaScript", "TypeScript", "Node.js", "React", "SQLite", "REST APIs"],
+  "education": [
+    {
+      "institution": "University of Maryland",
+      "degree": "B.S. Computer Science",
+      "start": "2015",
+      "end": "2019"
+    }
+  ]
 }
