@@ -2,7 +2,7 @@ import { fetchJobs } from "./fetchers/jsearch.js";
 import { isNew, markSeen } from "./store/db.js";
 import { tailorResume } from "./tailor/tailor.js";
 import { renderResume } from "./tailor/render.js";
-import { sendMessage } from "./notify/telegram.js";
+import { sendJobNotification } from "./bot/bot.js";
 import { logger } from "./lib/logger.js";
 
 export async function runOnce() {
@@ -14,17 +14,9 @@ export async function runOnce() {
   for (const job of fresh) {
     try {
       const tailored = await tailorResume(job);
+      const resumePath = tailored ? await renderResume(job, tailored) : null;
 
-      let note = `*${job.title}*\n${job.company} — ${job.location}\n${job.url}`;
-      if (tailored) {
-        const file = await renderResume(job, tailored);
-        note += `\n\nTailored resume: \`${file}\``;
-        if (tailored.unmatched_requirements?.length) {
-          note += `\n_Gaps:_ ${tailored.unmatched_requirements.join(", ")}`;
-        }
-      }
-
-      await sendMessage(note);
+      await sendJobNotification(job, tailored, resumePath);
       markSeen(job);
       logger.info(`Notified: ${job.title} @ ${job.company}`);
     } catch (err) {
