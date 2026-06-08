@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node src/index.js",
     "once": "node src/run-once.js",
-    "dev": "nodemon src/run-once.js"
+    "dev": "nodemon src/run-once.js",
+    "test": "node --test test/*.test.js"
   },
   "license": "MIT",
   "devDependencies": {
