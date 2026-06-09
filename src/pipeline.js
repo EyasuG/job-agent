@@ -1,6 +1,6 @@
 import pLimit from "p-limit";
 import { fetchAllJobs } from "./fetchers/index.js";
-import { isNew, markSeen } from "./store/db.js";
+import { isNew, markSeen, updateJobDetails } from "./store/db.js";
 import { tailorResume } from "./tailor/tailor.js";
 import { renderResume } from "./tailor/render.js";
 import { sendJobNotification } from "./bot/bot.js";
@@ -25,6 +25,7 @@ async function processJob(job) {
   const resumePath = tailored ? await renderResume(job, tailored) : null;
   await sendJobNotification(job, tailored, resumePath);
   markSeen(job);
+  updateJobDetails(job.id, tailored?.score ?? null, resumePath, job.description ?? null);
   logger.info(`Notified: ${job.title} @ ${job.company} (score: ${tailored?.score ?? "n/a"})`);
 }
 

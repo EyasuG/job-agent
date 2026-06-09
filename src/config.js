@@ -33,6 +33,9 @@ export const config = {
     model: optional("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
     minMatchScore: parseInt(optional("MIN_MATCH_SCORE", "50"), 10),
   },
+  web: {
+    port: parseInt(optional("WEB_PORT", "3000"), 10),
+  },
   schedule: optional("CRON_SCHEDULE", "0 */4 * * *"),
   paths: {
     root,

@@ -1,0 +1,69 @@
+/* ── Layout ─────────────────────────────────────────────────────────────────── */
+header { border-bottom: 1px solid var(--pico-muted-border-color); margin-bottom: 1.5rem; }
+header nav { padding: 0.75rem 0; }
+
+.tab-panel { animation: fadein 0.15s ease; }
+.tab-panel.hidden { display: none; }
+
+@keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
+
+.tab-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.tab-header h2 { margin: 0; }
+.tab-header input { flex: 1; min-width: 200px; margin: 0; }
+
+.btn-row { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.btn-row button { margin: 0; width: auto; }
+
+/* ── Table ───────────────────────────────────────────────────────────────────── */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; font-size: 0.9rem; }
+th { white-space: nowrap; }
+td { vertical-align: middle; }
+
+/* ── Score badges ────────────────────────────────────────────────────────────── */
+.score-high { color: #2d9e5f; font-weight: bold; }
+.score-mid  { color: #d97706; font-weight: bold; }
+.score-low  { color: #dc2626; font-weight: bold; }
+.score-none { color: var(--pico-muted-color); }
+
+/* ── Status badges ───────────────────────────────────────────────────────────── */
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 99px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.badge-new     { background: #e0f2fe; color: #0369a1; }
+.badge-saved   { background: #dcfce7; color: #166534; }
+.badge-skipped { background: #f3f4f6; color: #6b7280; }
+
+/* ── Stats grid ──────────────────────────────────────────────────────────────── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.stats-grid article { text-align: center; padding: 1.5rem 1rem; }
+.stats-grid h3 { font-size: 2rem; margin: 0 0 0.25rem; }
+.stats-grid p  { margin: 0; color: var(--pico-muted-color); font-size: 0.85rem; }
+
+/* ── Resume editor ───────────────────────────────────────────────────────────── */
+#resume-editor {
+  width: 100%;
+  font-family: "Menlo", "Monaco", "Courier New", monospace;
+  font-size: 0.85rem;
+  resize: vertical;
+}
+
+/* ── Misc ────────────────────────────────────────────────────────────────────── */
+.muted { color: var(--pico-muted-color); font-size: 0.85rem; }
+nav a.active { font-weight: bold; text-decoration: underline; }

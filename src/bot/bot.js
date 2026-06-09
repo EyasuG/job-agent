@@ -1,6 +1,7 @@
 import { Telegraf } from "telegraf";
 import { config } from "../config.js";
 import { logger } from "../lib/logger.js";
+import { updateJobStatus } from "../store/db.js";
 
 let bot = null;
 
@@ -97,11 +98,13 @@ export function startBot(runPipeline) {
     if (!data) return;
 
     if (data.startsWith("save:")) {
+      const jobId = data.slice(5);
+      updateJobStatus(jobId, "saved");
       await ctx.answerCbQuery("Saved! ✅");
-      // Future: persist to a saved-jobs table
     } else if (data.startsWith("skip:")) {
+      const jobId = data.slice(5);
+      updateJobStatus(jobId, "skipped");
       await ctx.answerCbQuery("Skipped.");
-      // The job is already marked seen in the pipeline; this is just UX acknowledgement
     } else {
       await ctx.answerCbQuery();
     }

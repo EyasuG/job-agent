@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Job Agent Dashboard</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="container">
+    <nav>
+      <ul>
+        <li><strong>🤖 Job Agent</strong></li>
+      </ul>
+      <ul>
+        <li><a href="#" data-tab="jobs" class="tab-link active">All Jobs</a></li>
+        <li><a href="#" data-tab="saved" class="tab-link">Saved</a></li>
+        <li><a href="#" data-tab="resume" class="tab-link">Resume Editor</a></li>
+        <li><a href="#" data-tab="status" class="tab-link">Status</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main class="container">
+
+    <!-- ── All Jobs ─────────────────────────────────────────────────────────── -->
+    <section id="tab-jobs" class="tab-panel">
+      <div class="tab-header">
+        <h2>All Jobs</h2>
+        <input type="search" id="jobs-search" placeholder="Filter by title or company…" />
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Company</th>
+              <th>Score</th>
+              <th>Date</th>
+              <th>Status</th>
+              <th>Resume</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="jobs-body">
+            <tr><td colspan="7" class="muted">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── Saved Jobs ────────────────────────────────────────────────────────── -->
+    <section id="tab-saved" class="tab-panel hidden">
+      <h2>Saved Jobs</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Company</th>
+              <th>Score</th>
+              <th>Date</th>
+              <th>Resume</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="saved-body">
+            <tr><td colspan="6" class="muted">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── Resume Editor ─────────────────────────────────────────────────────── -->
+    <section id="tab-resume" class="tab-panel hidden">
+      <div class="tab-header">
+        <h2>Resume Editor</h2>
+        <div class="btn-row">
+          <button id="resume-save-btn" class="contrast">Save Changes</button>
+          <span id="resume-status" class="muted"></span>
+        </div>
+      </div>
+      <p class="muted">Edit your <code>master.json</code> here. This is what Claude uses to tailor every resume.</p>
+      <textarea id="resume-editor" spellcheck="false" rows="40"></textarea>
+    </section>
+
+    <!-- ── Status ────────────────────────────────────────────────────────────── -->
+    <section id="tab-status" class="tab-panel hidden">
+      <h2>Agent Status</h2>
+      <div class="stats-grid">
+        <article>
+          <h3 id="stat-total">—</h3>
+          <p>Total jobs found</p>
+        </article>
+        <article>
+          <h3 id="stat-new">—</h3>
+          <p>Unactioned</p>
+        </article>
+        <article>
+          <h3 id="stat-running">—</h3>
+          <p>Agent state</p>
+        </article>
+        <article>
+          <h3 id="stat-last">—</h3>
+          <p>Last run</p>
+        </article>
+      </div>
+      <div class="btn-row" style="margin-top:1.5rem">
+        <button id="run-now-btn" class="contrast">🔍 Run Scan Now</button>
+        <span id="run-status" class="muted"></span>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
