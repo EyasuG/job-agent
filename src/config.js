@@ -23,7 +23,7 @@ export const config = {
   jobApi: {
     rapidApiKey: optional("RAPIDAPI_KEY", ""),
     adzunaAppId: optional("ADZUNA_APP_ID", ""),
-    adzunaApiKey: optional("ADZUNA_API_KEY", ""),
+    adzunaApiKey: optional("ADZUNA_APP_KEY", ""),
     query: optional("JOB_QUERY", "javascript developer"),
     location: optional("JOB_LOCATION", "Washington, DC"),
     datePosted: optional("JOB_DATE_POSTED", "week"),

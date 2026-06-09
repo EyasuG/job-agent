@@ -8,7 +8,7 @@ export async function fetchJobs() {
   const { adzunaAppId, adzunaApiKey, query, location } = config.jobApi;
 
   if (!adzunaAppId || !adzunaApiKey) {
-    logger.warn("ADZUNA_APP_ID or ADZUNA_API_KEY not set — skipping Adzuna.");
+    logger.warn("ADZUNA_APP_ID or ADZUNA_APP_KEY not set — skipping Adzuna.");
     return [];
   }
 
@@ -19,10 +19,11 @@ export async function fetchJobs() {
     where: location,
     results_per_page: "20",
     sort_by: "date",
-    content_type: "application/json",
   });
 
-  const res = await fetch(`${BASE}?${params}`);
+  const res = await fetch(`${BASE}?${params}`, {
+    headers: { "Content-Type": "application/json" },
+  });
 
   if (!res.ok) {
     throw new Error(`Adzuna request failed (${res.status})`);
