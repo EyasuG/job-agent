@@ -23,9 +23,21 @@ export async function fetchJobs() {
     }
 
     const data = await res.json();
-    jobs.push(...(data.jobs ?? []).map(normalize));
+    jobs.push(...(data.jobs ?? []).filter(isUsEligible).map(normalize));
   }
   return jobs;
+}
+
+// Remotive lists jobs worldwide; keep only ones a US-based candidate can take.
+// candidate_required_location examples: "USA", "USA Only", "United States",
+// "Worldwide", "Americas", "Canada, USA", "Brazil", "Europe".
+const US_LOCATION = /\b(?:usa|u\.s\.a?\.?|united states|worldwide|anywhere|americas|north america)\b/i;
+
+export function isUsEligible(j) {
+  const loc = j.candidate_required_location ?? "";
+  // No restriction listed → assume open to anyone, keep it
+  if (!loc.trim()) return true;
+  return US_LOCATION.test(loc);
 }
 
 function normalize(j) {

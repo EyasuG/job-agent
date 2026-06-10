@@ -61,3 +61,40 @@ test("does NOT flag 'cleared' in description prose", () => {
     false
   );
 });
+
+// ── Remotive US-eligibility filter ───────────────────────────────────────────
+
+import { isUsEligible } from "../src/fetchers/remotive.js";
+
+test("keeps USA-only jobs", () => {
+  assert.ok(isUsEligible({ candidate_required_location: "USA Only" }));
+});
+
+test("keeps United States jobs", () => {
+  assert.ok(isUsEligible({ candidate_required_location: "United States" }));
+});
+
+test("keeps Worldwide jobs", () => {
+  assert.ok(isUsEligible({ candidate_required_location: "Worldwide" }));
+});
+
+test("keeps Americas multi-region jobs", () => {
+  assert.ok(isUsEligible({ candidate_required_location: "Americas, Europe, Israel" }));
+});
+
+test("keeps jobs with no location restriction", () => {
+  assert.ok(isUsEligible({ candidate_required_location: "" }));
+  assert.ok(isUsEligible({}));
+});
+
+test("drops Brazil-only jobs", () => {
+  assert.equal(isUsEligible({ candidate_required_location: "Brazil" }), false);
+});
+
+test("drops Europe-only jobs", () => {
+  assert.equal(isUsEligible({ candidate_required_location: "Europe" }), false);
+});
+
+test("keeps mixed 'Canada, USA' jobs", () => {
+  assert.ok(isUsEligible({ candidate_required_location: "Canada, USA" }));
+});
