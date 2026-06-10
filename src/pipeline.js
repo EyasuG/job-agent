@@ -13,6 +13,14 @@ const CONCURRENCY = 3;
 async function processJob(job) {
   const tailored = await tailorResume(job);
 
+  // If an API key is configured but tailoring failed (parse error, truncation),
+  // leave the job unseen so it gets retried on the next run instead of
+  // notifying without a score.
+  if (!tailored && config.llm.apiKey) {
+    logger.warn(`Tailoring failed for ${job.title} @ ${job.company} — will retry next run.`);
+    return;
+  }
+
   if (tailored) {
     const score = tailored.score ?? 0;
     if (score < config.llm.minMatchScore) {

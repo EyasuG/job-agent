@@ -24,9 +24,16 @@ export const config = {
     rapidApiKey: optional("RAPIDAPI_KEY", ""),
     adzunaAppId: optional("ADZUNA_APP_ID", ""),
     adzunaApiKey: optional("ADZUNA_APP_KEY", ""),
-    query: optional("JOB_QUERY", "javascript developer"),
+    joobleApiKey: optional("JOOBLE_API_KEY", ""),
+    // Comma-separated list of search queries; each fetcher runs all of them
+    queries: optional("JOB_QUERIES", "javascript developer,devops engineer")
+      .split(",")
+      .map((q) => q.trim())
+      .filter(Boolean),
     location: optional("JOB_LOCATION", "Washington, DC"),
     datePosted: optional("JOB_DATE_POSTED", "week"),
+    // Skip jobs that require a security clearance
+    excludeClearance: optional("EXCLUDE_CLEARANCE", "true") === "true",
   },
   llm: {
     apiKey: optional("ANTHROPIC_API_KEY", ""),

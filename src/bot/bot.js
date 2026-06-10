@@ -25,7 +25,9 @@ export async function sendJobNotification(job, tailored, resumePath) {
   const { chatId } = config.telegram;
 
   const score = tailored?.score;
-  const scoreBar = score != null ? ` — Match: ${score}/100` : "";
+  const coverage = tailored?.keyword_coverage;
+  let scoreBar = score != null ? ` — Match: ${score}/100` : "";
+  if (coverage != null) scoreBar += ` — Keywords: ${coverage}%`;
   let text = `*${escMd(job.title)}*\n${escMd(job.company)} — ${escMd(job.location)}${escMd(scoreBar)}`;
 
   if (tailored?.unmatched_requirements?.length) {
