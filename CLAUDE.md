@@ -47,24 +47,38 @@ prefer clear, well-commented, idiomatic code over clever abstractions.
 ```
 src/
   config.js          # env loading + validation + path resolution (single source of truth)
-  index.js           # entry: starts the scheduler (npm start)
+  index.js           # entry: starts bot + scheduler + web dashboard (npm start)
   run-once.js        # entry: runs a single pipeline pass (npm run once)
   scheduler.js       # node-cron wrapper around the pipeline
-  pipeline.js        # orchestrates fetch -> dedup -> tailor -> render -> notify
+  pipeline.js        # orchestrates fetch -> dedup -> tailor -> render -> notify (p-limit concurrency)
+  bot/
+    bot.js           # Telegraf bot: /start /status /run + inline Save/Skip buttons
   fetchers/
-    jsearch.js       # job source client; returns NORMALIZED job objects
+    index.js         # aggregator: runs all sources, merges, dedups, clearance-filters
+    jsearch.js       # JSearch via RapidAPI (multi-query)
+    adzuna.js        # Adzuna (multi-query)
+    remotive.js      # Remotive remote jobs (free, no key; US-eligible only)
+    jooble.js        # Jooble (POST API; skips until JOOBLE_API_KEY is set)
   store/
-    db.js            # node:sqlite dedup store (isNew / markSeen)
+    db.js            # node:sqlite store: dedup + score/resume_path/status/description
   tailor/
-    tailor.js        # Claude call; returns { summary, tailored_bullets, unmatched_requirements }
-    render.js        # writes a .docx from the tailored result
+    tailor.js        # Claude ATS keyword optimizer; returns score, keyword_coverage, bullets, gaps
+    render.js        # styled .docx: header, summary, experience, skills, education
   notify/
-    telegram.js      # sendMessage(text)
+    telegram.js      # legacy plain sendMessage(text)
+  web/
+    server.js        # Express app: static files + API routes
+    api/             # jobs.js, resume.js, agent.js route modules
   lib/
     logger.js        # timestamped logger
+    filters.js       # requiresClearance() — security-clearance job filter
+public/              # dashboard frontend (vanilla JS + Pico CSS)
+test/                # node:test suites (npm test)
+deploy/              # launchd plist + installer, systemd unit, DEPLOYMENT.md
 resume/master.json   # user's real resume (gitignored; example provided)
 data/                # sqlite db (gitignored)
 output/              # generated resumes (gitignored)
+logs/                # launchd log output (gitignored)
 ```
 
 ## 5. The normalized job object
@@ -91,28 +105,46 @@ If you add a new job source, normalize to this shape inside that fetcher.
 
 ## 7. Current status
 
-Working foundation is in place: config, logging, Telegram notifier, dedup store,
-JSearch fetcher, Claude tailor, docx renderer, pipeline, scheduler. The Telegram
-channel has been tested end-to-end.
+Everything below is built, tested end-to-end with live APIs, and pushed to
+github.com/EyasuG/job-agent (branch `jobReady`):
+
+- **Pipeline**: fetch → clearance filter → dedup → Claude tailor (ATS keyword
+  optimization with score + keyword_coverage) → styled .docx → Telegram notify,
+  processed 3-at-a-time with p-limit. Failed tailoring is retried next run.
+- **Job sources** (4): JSearch + Adzuna (live), Remotive (live, US-eligible only),
+  Jooble (activates when JOOBLE_API_KEY is set). Multi-query via JOB_QUERIES
+  (currently "javascript developer,devops engineer").
+- **Curation**: clearance-required jobs filtered out (EXCLUDE_CLEARANCE=true);
+  jobs below MIN_MATCH_SCORE are silently skipped and marked seen.
+- **Telegram bot** (telegraf): /start /status /run commands; Save/Skip inline
+  buttons persist status to the DB shared with the dashboard.
+- **Web dashboard** (Express + vanilla JS, port 3000): jobs table with search and
+  score badges, saved-jobs view, master.json editor, status page with Run Now.
+- **Tests**: 35 passing (`npm test`, node:test) — normalization, dedup,
+  aggregation, clearance + US-eligibility filters.
+- **Deployment**: launchd installer (deploy/install-launchd.sh) and systemd unit
+  documented in deploy/DEPLOYMENT.md.
+
+**Biggest open gap: `resume/master.json` still contains placeholder experience.**
+Match scores stay low (8–42) until the user's real work history is added; the
+LinkedIn basic export only had the profile summary, so experience/education/skills
+must come from the full LinkedIn archive or be entered manually.
 
 ## 8. Roadmap (suggested next tasks)
 
-In rough priority order. Pick up where the user directs.
-
-1. **Validate the full pipeline** with a real RapidAPI key and a real `master.json`;
-   confirm a tailored `.docx` is produced and the Telegram message links it.
-2. **Telegram interactivity** (migrate to `telegraf`): inline buttons to "skip",
-   "save", or "open" a job; let the user trigger a run on demand with a command.
-3. **Better resume rendering**: contact header, sections, consistent styling; consider
-   a template so output looks like a finished resume, not a draft.
-4. **Match scoring**: have the tailor return a 0–100 relevance score and filter or sort
-   notifications by it to cut noise.
-5. **Multiple job sources**: add an Adzuna or Google-Jobs (SerpApi) fetcher behind the
-   same normalized interface; merge + dedup across sources.
-6. **Concurrency**: tailor several new jobs in parallel with `p-limit` (cap to respect
-   API rate limits).
-7. **Tests**: unit-test normalization and dedup; mock the network boundaries.
-8. **Deployment**: document running as a `launchd` service on macOS or on a small VPS.
+1. **Fill in master.json with real experience** — highest leverage; unblocks
+   meaningful match scores and the 95%+ keyword-fit goal.
+2. **Jooble activation** — paste JOOBLE_API_KEY into .env once the key request
+   is approved (no code change needed).
+3. **Dashboard auth** — the Express server is unauthenticated; add a simple
+   token/basic-auth gate before exposing it beyond localhost.
+4. **Job detail view** — dashboard modal showing stored description,
+   missing_keywords, and unmatched_requirements per job.
+5. **Application tracker** — extend status beyond saved/skipped
+   (applied / interviewing / rejected / offer) in DB, bot, and dashboard.
+6. **Resume PDF export** — render or convert to PDF alongside .docx.
+7. **Run history** — persist pipeline runs (time, fetched, notified) and chart
+   them on the Status tab.
 
 ## 9. How to work in this repo
 
