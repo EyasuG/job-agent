@@ -7,13 +7,10 @@
   "scripts": {
     "start": "node src/index.js",
     "once": "node src/run-once.js",
-    "dev": "nodemon src/run-once.js",
+    "dev": "node --watch src/index.js",
     "test": "node --test test/*.test.js"
   },
   "license": "MIT",
-  "devDependencies": {
-    "nodemon": "^3.1.14"
-  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.102.0",
     "docx": "^9.7.1",
