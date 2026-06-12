@@ -1,5 +1,7 @@
+import fs from "node:fs";
 import pLimit from "p-limit";
 import { fetchAllJobs } from "./fetchers/index.js";
+import { buildPrescreen } from "./lib/prescreen.js";
 import { isNew, markSeen, updateJobDetails } from "./store/db.js";
 import { tailorResume } from "./tailor/tailor.js";
 import { renderResume } from "./tailor/render.js";
@@ -43,10 +45,28 @@ export async function runOnce() {
   const fresh = jobs.filter((j) => j.id && isNew(j.id));
   logger.info(`Found ${jobs.length} jobs, ${fresh.length} new.`);
 
+  // Free relevance prescreen: drop jobs sharing too few skills with the
+  // resume before spending any Anthropic tokens on them.
+  let candidates = fresh;
+  try {
+    const master = JSON.parse(fs.readFileSync(config.paths.masterResume, "utf8"));
+    const matchesProfile = buildPrescreen(master.skills, config.llm.prescreenMinMatches);
+    candidates = fresh.filter((job) => {
+      if (matchesProfile(job)) return true;
+      markSeen(job); // permanently irrelevant — never reconsider
+      return false;
+    });
+    logger.info(
+      `Prescreen: ${fresh.length - candidates.length} irrelevant jobs dropped without API calls, ${candidates.length} to tailor.`
+    );
+  } catch (err) {
+    logger.warn(`Prescreen skipped (${err.message}) — tailoring all new jobs.`);
+  }
+
   const limit = pLimit(CONCURRENCY);
 
   await Promise.all(
-    fresh.map((job) =>
+    candidates.map((job) =>
       limit(() =>
         processJob(job).catch((err) =>
           logger.error(`Failed on job ${job.id}: ${err.message}`)

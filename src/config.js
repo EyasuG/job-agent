@@ -39,6 +39,8 @@ export const config = {
     apiKey: optional("ANTHROPIC_API_KEY", ""),
     model: optional("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
     minMatchScore: parseInt(optional("MIN_MATCH_SCORE", "50"), 10),
+    // Minimum resume-skill hits in a posting before it's worth an API call
+    prescreenMinMatches: parseInt(optional("PRESCREEN_MIN_MATCHES", "2"), 10),
   },
   web: {
     port: parseInt(optional("WEB_PORT", "3000"), 10),
