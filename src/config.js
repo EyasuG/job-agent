@@ -44,6 +44,9 @@ export const config = {
     port: parseInt(optional("WEB_PORT", "3000"), 10),
   },
   schedule: optional("CRON_SCHEDULE", "0 */4 * * *"),
+  // Run a catch-up scan shortly after startup (covers ticks missed while
+  // the process was down or the machine was asleep)
+  runOnStart: optional("RUN_ON_START", "true") === "true",
   paths: {
     root,
     data: path.join(root, "data"),
