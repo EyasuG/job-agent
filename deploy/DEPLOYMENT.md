@@ -33,15 +33,24 @@ tail -f logs/agent.log
 tail -f logs/agent.error.log
 
 # Stop
-launchctl unload ~/Library/LaunchAgents/com.jobagent.plist
+launchctl bootout gui/$(id -u)/com.jobagent
 
 # Start
-launchctl load -w ~/Library/LaunchAgents/com.jobagent.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.jobagent.plist
 
 # Uninstall completely
-launchctl unload ~/Library/LaunchAgents/com.jobagent.plist
+launchctl bootout gui/$(id -u)/com.jobagent
 rm ~/Library/LaunchAgents/com.jobagent.plist
 ```
+
+> **macOS gotcha — `EX_CONFIG (78)` / agent won't start.** If `launchctl print
+> gui/$(id -u)/com.jobagent` shows `last exit code = 78` and nothing is logged,
+> the log files picked up a TCC `com.apple.macl` xattr (from a Terminal-run
+> process writing to them) that blocks the launchd process from opening them.
+> Fix: `rm logs/agent.log logs/agent.error.log` and re-run the installer so
+> launchd recreates clean files. Avoid running `npm run dev`/`npm start` and the
+> launchd service at the same time — two pollers also conflict on Telegram and
+> port 3000.
 
 ### Re-deploy after code changes
 

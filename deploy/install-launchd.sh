@@ -78,9 +78,23 @@ cp /tmp/${PLIST_NAME}.plist "$PLIST_DEST"
 
 # ── Load the agent ───────────────────────────────────────────────────────────
 
-# Unload first in case an old version is running
+# Remove any TCC-tainted log files. When a Terminal-launched process (which
+# holds Desktop/Documents access) writes to these files, macOS stamps them with
+# a `com.apple.macl` extended attribute that then blocks the launchd-spawned
+# process from opening them — launchd reports EX_CONFIG (78) and never starts.
+# Deleting them lets launchd create clean files it owns.
+rm -f "$LOG_DIR/agent.log" "$LOG_DIR/agent.error.log"
+
+GUI_DOMAIN="gui/$(id -u)"
+
+# Tear down any prior registration in BOTH the legacy and modern domains;
+# mixing `load` and `bootstrap` for the same label leaves it in a broken state.
+launchctl bootout "$GUI_DOMAIN/$PLIST_NAME" 2>/dev/null || true
 launchctl unload "$PLIST_DEST" 2>/dev/null || true
-launchctl load -w "$PLIST_DEST"
+sleep 1
+
+# Modern loader (bootstrap); fall back to legacy load on older macOS.
+launchctl bootstrap "$GUI_DOMAIN" "$PLIST_DEST" 2>/dev/null || launchctl load -w "$PLIST_DEST"
 
 echo ""
 echo "✅  job-agent installed and started."
@@ -88,6 +102,6 @@ echo ""
 echo "Useful commands:"
 echo "  View logs:    tail -f $LOG_DIR/agent.log"
 echo "  Error logs:   tail -f $LOG_DIR/agent.error.log"
-echo "  Stop agent:   launchctl unload $PLIST_DEST"
-echo "  Start agent:  launchctl load -w $PLIST_DEST"
-echo "  Uninstall:    launchctl unload $PLIST_DEST && rm $PLIST_DEST"
+echo "  Stop agent:   launchctl bootout gui/\$(id -u)/$PLIST_NAME"
+echo "  Start agent:  launchctl bootstrap gui/\$(id -u) $PLIST_DEST"
+echo "  Uninstall:    launchctl bootout gui/\$(id -u)/$PLIST_NAME && rm $PLIST_DEST"
