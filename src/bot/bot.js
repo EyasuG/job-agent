@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { Telegraf } from "telegraf";
 import { config } from "../config.js";
 import { logger } from "../lib/logger.js";
@@ -34,10 +35,6 @@ export async function sendJobNotification(job, tailored, resumePath) {
     text += `\n\n_Gaps:_ ${tailored.unmatched_requirements.map(escMd).join(", ")}`;
   }
 
-  if (resumePath) {
-    text += `\n\n_Resume:_ \`${resumePath}\``;
-  }
-
   const keyboard = {
     inline_keyboard: [
       [
@@ -48,11 +45,59 @@ export async function sendJobNotification(job, tailored, resumePath) {
     ],
   };
 
+  // If a tailored resume was rendered, attach the actual .docx so it can be
+  // downloaded straight from the chat. Telegram captions cap at 1024 chars,
+  // which the job summary above stays well within.
+  if (resumePath && fs.existsSync(resumePath)) {
+    try {
+      await sendDocumentNative(chatId, resumePath, friendlyFilename(job), text, keyboard);
+      return;
+    } catch (err) {
+      // Fall through to a plain message with the path if the upload fails.
+      logger.error(`Resume upload failed for ${job.title}: ${err.message}`);
+      text += `\n\n_Resume saved at:_ \`${escMd(resumePath)}\``;
+    }
+  }
+
+  // Fallback: no resume file (or upload failed) — send the summary as text.
   await getBot().telegram.sendMessage(chatId, text, {
     parse_mode: "MarkdownV2",
     reply_markup: keyboard,
     disable_web_page_preview: true,
   });
+}
+
+const DOCX_MIME =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+/**
+ * Uploads a document via the raw Telegram Bot API using native fetch/FormData.
+ * Telegraf v4 bundles a legacy node-fetch whose streaming multipart upload
+ * resets the socket on Node 22+, so we bypass it for file uploads only.
+ */
+async function sendDocumentNative(chatId, filePath, filename, caption, keyboard) {
+  const buf = fs.readFileSync(filePath);
+  const form = new FormData();
+  form.append("chat_id", String(chatId));
+  form.append("caption", caption);
+  form.append("parse_mode", "MarkdownV2");
+  form.append("reply_markup", JSON.stringify(keyboard));
+  form.append("document", new Blob([buf], { type: DOCX_MIME }), filename);
+
+  const res = await fetch(
+    `https://api.telegram.org/bot${config.telegram.token}/sendDocument`,
+    { method: "POST", body: form }
+  );
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.description || `HTTP ${res.status}`);
+  return data;
+}
+
+/** Builds a readable download filename like "Resume - Acme - React Dev.docx". */
+function friendlyFilename(job) {
+  const clean = (s) => String(s ?? "").replace(/[^a-z0-9 .-]/gi, "").trim().slice(0, 40);
+  const name = `Resume - ${clean(job.company)} - ${clean(job.title)}`.replace(/\s+/g, " ").trim();
+  return `${name || "Resume"}.docx`;
 }
 
 /**
