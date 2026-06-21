@@ -15,6 +15,19 @@ function optional(name, fallback) {
   return process.env[name] ?? fallback;
 }
 
+// Maps a provider to its conventional env var so all keys can coexist in .env.
+function providerKey(provider) {
+  const byProvider = {
+    gemini: "GEMINI_API_KEY",
+    groq: "GROQ_API_KEY",
+    openrouter: "OPENROUTER_API_KEY",
+    anthropic: "ANTHROPIC_API_KEY",
+    ollama: "", // local, no key
+  };
+  const envName = byProvider[provider];
+  return envName ? optional(envName, "") : "";
+}
+
 export const config = {
   telegram: {
     token: required("TELEGRAM_BOT_TOKEN"),
@@ -38,9 +51,12 @@ export const config = {
   llm: {
     // Which AI backend to use: gemini | groq | ollama | openrouter | anthropic
     provider: optional("LLM_PROVIDER", "gemini").toLowerCase(),
-    // Generic key for the active provider; falls back to the legacy
-    // ANTHROPIC_API_KEY so existing setups keep working.
-    apiKey: optional("LLM_API_KEY", "") || optional("ANTHROPIC_API_KEY", ""),
+    // Key resolution: explicit LLM_API_KEY wins, otherwise fall back to the
+    // provider-specific key, so all keys can live in .env and you switch
+    // providers by changing LLM_PROVIDER alone.
+    apiKey:
+      optional("LLM_API_KEY", "") ||
+      providerKey(optional("LLM_PROVIDER", "gemini").toLowerCase()),
     // Override the provider's default model (empty = use provider default)
     model: optional("LLM_MODEL", ""),
     // Model used only when provider === "anthropic"
