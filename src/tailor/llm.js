@@ -15,7 +15,7 @@ const PROVIDERS = {
   },
   ollama: {
     baseURL: "http://localhost:11434/v1",
-    model: "llama3.1:8b",
+    model: "qwen2.5:7b",
     keyless: true, // local server needs no API key
   },
   openrouter: {
