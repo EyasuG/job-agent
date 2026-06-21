@@ -1,7 +1,7 @@
-import Anthropic from "@anthropic-ai/sdk";
 import fs from "node:fs";
 import { config } from "../config.js";
 import { logger } from "../lib/logger.js";
+import { callLLM, llmConfigured } from "./llm.js";
 
 // Job descriptions can run 20k+ chars of boilerplate (benefits, EEO text).
 // The requirements are nearly always in the first part — truncating saves
@@ -38,51 +38,36 @@ Respond with ONLY valid JSON, no markdown fences, in exactly this shape:
 {"score": number, "keyword_coverage": number, "missing_keywords": string[], "summary": string, "tailored_bullets": string[], "unmatched_requirements": string[]}`;
 
 export async function tailorResume(job) {
-  if (!config.llm.apiKey) {
-    logger.warn("ANTHROPIC_API_KEY not set — skipping tailoring.");
+  if (!llmConfigured()) {
+    logger.warn("No LLM provider configured — skipping tailoring.");
     return null;
   }
 
   const master = fs.readFileSync(config.paths.masterResume, "utf8");
-  const client = new Anthropic({ apiKey: config.llm.apiKey });
-
   const description = (job.description ?? "").slice(0, MAX_DESCRIPTION_CHARS);
 
-  const message = await client.messages.create({
-    model: config.llm.model,
-    max_tokens: 4000,
-    // The system prompt and master resume are identical for every job in a
-    // run, so they're marked as a cacheable prefix: the first call writes the
-    // cache, every following call within 5 minutes reads it at ~10% of the
-    // input price. Only the job description below is billed in full each time.
-    system: [
-      {
-        type: "text",
-        text: SYSTEM_PROMPT,
-      },
-      {
-        type: "text",
-        text: `MASTER_RESUME:\n${master}`,
-        cache_control: { type: "ephemeral" },
-      },
-    ],
-    messages: [
-      {
-        role: "user",
-        content: `JOB_DESCRIPTION:\n${description}`,
-      },
-    ],
-  });
+  let text;
+  try {
+    // System prompt + master resume are identical for every job in a run.
+    // On Anthropic they're sent as a cacheable prefix; other providers just
+    // receive them as the system message.
+    text = await callLLM({
+      systemStable: SYSTEM_PROMPT,
+      systemCacheable: `MASTER_RESUME:\n${master}`,
+      user: `JOB_DESCRIPTION:\n${description}`,
+      maxTokens: 4000,
+    });
+  } catch (err) {
+    logger.error(`LLM call failed for ${job.title}: ${err.message}`);
+    return null;
+  }
 
-  let text = message.content.find((b) => b.type === "text")?.text ?? "{}";
   // Strip markdown fences if the model added them despite instructions
-  text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+  text = (text || "{}").replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
   try {
     return JSON.parse(text);
   } catch {
-    logger.error(
-      `LLM returned non-JSON (stop_reason: ${message.stop_reason}); skipping tailoring for this job.`
-    );
+    logger.error("LLM returned non-JSON; skipping tailoring for this job.");
     return null;
   }
 }

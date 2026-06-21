@@ -4,6 +4,7 @@ import { fetchAllJobs } from "./fetchers/index.js";
 import { buildPrescreen } from "./lib/prescreen.js";
 import { isNew, markSeen, updateJobDetails } from "./store/db.js";
 import { tailorResume } from "./tailor/tailor.js";
+import { llmConfigured, llmLabel } from "./tailor/llm.js";
 import { renderResume } from "./tailor/render.js";
 import { sendJobNotification } from "./bot/bot.js";
 import { config } from "./config.js";
@@ -15,10 +16,10 @@ const CONCURRENCY = 3;
 async function processJob(job) {
   const tailored = await tailorResume(job);
 
-  // If an API key is configured but tailoring failed (parse error, truncation),
+  // If an LLM is configured but tailoring failed (parse error, truncation),
   // leave the job unseen so it gets retried on the next run instead of
   // notifying without a score.
-  if (!tailored && config.llm.apiKey) {
+  if (!tailored && llmConfigured()) {
     logger.warn(`Tailoring failed for ${job.title} @ ${job.company} — will retry next run.`);
     return;
   }
@@ -40,7 +41,7 @@ async function processJob(job) {
 }
 
 export async function runOnce() {
-  logger.info("Fetching jobs...");
+  logger.info(`Fetching jobs... (LLM: ${llmConfigured() ? llmLabel() : "none"})`);
   const jobs = await fetchAllJobs();
   const fresh = jobs.filter((j) => j.id && isNew(j.id));
   logger.info(`Found ${jobs.length} jobs, ${fresh.length} new.`);

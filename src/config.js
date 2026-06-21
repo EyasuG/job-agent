@@ -36,8 +36,15 @@ export const config = {
     excludeClearance: optional("EXCLUDE_CLEARANCE", "true") === "true",
   },
   llm: {
-    apiKey: optional("ANTHROPIC_API_KEY", ""),
-    model: optional("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
+    // Which AI backend to use: gemini | groq | ollama | openrouter | anthropic
+    provider: optional("LLM_PROVIDER", "gemini").toLowerCase(),
+    // Generic key for the active provider; falls back to the legacy
+    // ANTHROPIC_API_KEY so existing setups keep working.
+    apiKey: optional("LLM_API_KEY", "") || optional("ANTHROPIC_API_KEY", ""),
+    // Override the provider's default model (empty = use provider default)
+    model: optional("LLM_MODEL", ""),
+    // Model used only when provider === "anthropic"
+    anthropicModel: optional("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
     minMatchScore: parseInt(optional("MIN_MATCH_SCORE", "50"), 10),
     // Minimum resume-skill hits in a posting before it's worth an API call
     prescreenMinMatches: parseInt(optional("PRESCREEN_MIN_MATCHES", "2"), 10),
