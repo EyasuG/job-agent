@@ -8,7 +8,7 @@ import { logger } from "../lib/logger.js";
 const PROVIDERS = {
   gemini: {
     baseURL: "https://generativelanguage.googleapis.com/v1beta/openai",
-    model: "gemini-2.0-flash",
+    model: "gemini-2.5-flash", // gemini-2.0-flash was retired by Google
     envKey: "GEMINI_API_KEY",
   },
   groq: {
