@@ -7,8 +7,14 @@ const CLEARANCE_PATTERNS = [
   /\brequires?\s+(?:an?\s+)?(?:active\s+)?(?:security\s+)?clearance\b/i,
   /\bmust\s+(?:have|hold|possess)\s+(?:an?\s+)?(?:active\s+)?(?:security\s+)?clearance\b/i,
   /\bclearance\s*[:?]?\s*(?:active\s+)?(?:secret|top\s+secret|ts\/sci)\b/i,
-  /\bpoly(?:graph)?\s+(?:required|clearance)\b/i,
-  /\b(?:ci|fs|full[\s-]scope)\s+poly(?:graph)?\b/i,
+  // Polygraph requirements (candidate does not qualify). "polygraph" spelled
+  // out is always clearance-related; the short "poly" is only matched with a
+  // clearance qualifier so it never hits polymer/polyglot/polygon/etc.
+  /\bpolygraph\b/i,
+  /\bpoly(?:graph)?\s+(?:required|clearance|test|exam)\b/i,
+  /\b(?:ci|fs|full[\s-]scope|lifestyle|counter[\s-]?intelligence)\s*[-]?\s*poly(?:graph)?\b/i,
+  /\b(?:w\/|with|and)\s*poly(?:graph)?\b/i,
+  /\bts\/sci\s*\/\s*poly\b/i,
   /\bpublic\s+trust\s+clearance\s+required\b/i,
   /\b(?:secret|top.secret|ts\/sci)\s+cleared\b/i,
   /\bclearance\s+required\b/i,

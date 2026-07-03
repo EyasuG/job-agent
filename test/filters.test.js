@@ -25,6 +25,33 @@ test("flags polygraph requirement", () => {
   assert.ok(requiresClearance({ title: "Dev", description: "CI poly required." }));
 });
 
+// ── Polygraph-specific coverage (candidate does not qualify) ──────────────────
+test("flags spelled-out 'polygraph'", () => {
+  assert.ok(requiresClearance({ title: "Engineer", description: "Must pass a polygraph." }));
+});
+test("flags 'Full Scope Poly'", () => {
+  assert.ok(requiresClearance({ title: "Full Scope Poly Developer", description: "" }));
+});
+test("flags 'Lifestyle Poly'", () => {
+  assert.ok(requiresClearance({ title: "Dev", description: "Requires TS/SCI with Lifestyle Poly." }));
+});
+test("flags 'FS Poly'", () => {
+  assert.ok(requiresClearance({ title: "Cloud Engineer - FS Poly", description: "" }));
+});
+test("flags 'Counterintelligence Polygraph'", () => {
+  assert.ok(requiresClearance({ title: "Dev", description: "Active TS/SCI and Counterintelligence Polygraph." }));
+});
+test("flags 'TS/SCI w/ Poly'", () => {
+  assert.ok(requiresClearance({ title: "Dev", description: "TS/SCI w/ Poly needed." }));
+});
+test("flags 'TS/SCI/Poly'", () => {
+  assert.ok(requiresClearance({ title: "Engineer TS/SCI/Poly", description: "" }));
+});
+test("does NOT false-match 'Polymer' / 'polyglot' / 'polygon'", () => {
+  assert.equal(requiresClearance({ title: "Frontend Dev", description: "Experience with Polymer, LitElement, and Web Components." }), false);
+  assert.equal(requiresClearance({ title: "Polyglot Engineer", description: "Comfortable in a polyglot stack; polygon rendering a plus." }), false);
+});
+
 test("does NOT flag a plain JavaScript job", () => {
   assert.equal(
     requiresClearance({ title: "Frontend Developer", description: "React, Node.js, REST APIs. Hybrid in DC." }),
