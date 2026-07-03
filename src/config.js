@@ -25,6 +25,10 @@ export const config = {
     adzunaAppId: optional("ADZUNA_APP_ID", ""),
     adzunaApiKey: optional("ADZUNA_APP_KEY", ""),
     joobleApiKey: optional("JOOBLE_API_KEY", ""),
+    serpApiKey: optional("SERPAPI_KEY", ""),
+    // Monthly SerpApi search cap; the fetcher stops calling once hit so the
+    // free tier (250/mo) is never exceeded. Set below 250 for headroom.
+    serpApiMonthlyLimit: parseInt(optional("SERPAPI_MONTHLY_LIMIT", "240"), 10),
     // Comma-separated list of search queries; each fetcher runs all of them
     queries: optional("JOB_QUERIES", "javascript developer,devops engineer")
       .split(",")

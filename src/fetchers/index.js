@@ -2,6 +2,7 @@ import { fetchJobs as fetchJSearch } from "./jsearch.js";
 import { fetchJobs as fetchAdzuna } from "./adzuna.js";
 import { fetchJobs as fetchRemotive } from "./remotive.js";
 import { fetchJobs as fetchJooble } from "./jooble.js";
+import { fetchJobs as fetchSerpApi } from "./serpapi.js";
 import { requiresClearance } from "../lib/filters.js";
 import { config } from "../config.js";
 import { logger } from "../lib/logger.js";
@@ -18,6 +19,7 @@ export async function fetchAllJobs() {
     fetchAdzuna(),
     fetchRemotive(),
     fetchJooble(),
+    fetchSerpApi(),
   ]);
 
   const jobs = [];

@@ -108,3 +108,46 @@ test("Adzuna: falls back to empty strings for missing optional fields", () => {
   assert.equal(job.url, "");
   assert.equal(job.description, "");
 });
+
+// ── SerpApi (Google Jobs) normalization ──────────────────────────────────────
+
+function normalizeSerpApi(j) {
+  const url = j.apply_options?.[0]?.link || j.share_link || "";
+  return {
+    id: `serpapi:${j.job_id ?? url}`,
+    title: j.title ?? "",
+    company: j.company_name ?? "",
+    location: j.location ?? "",
+    url,
+    description: j.description ?? "",
+  };
+}
+
+test("SerpApi: normalizes a full Google Jobs record", () => {
+  const raw = {
+    job_id: "abc==",
+    title: "React Developer",
+    company_name: "Acme",
+    location: "Washington, DC",
+    description: "Build React apps.",
+    apply_options: [{ title: "Apply on Indeed", link: "https://indeed.com/job/1" }],
+    share_link: "https://serpapi.com/share/1",
+  };
+  const job = normalizeSerpApi(raw);
+  assert.equal(job.id, "serpapi:abc==");
+  assert.equal(job.title, "React Developer");
+  assert.equal(job.company, "Acme");
+  assert.equal(job.location, "Washington, DC");
+  assert.equal(job.url, "https://indeed.com/job/1"); // prefers apply link
+  assert.equal(job.description, "Build React apps.");
+});
+
+test("SerpApi: falls back to share_link when no apply option", () => {
+  const job = normalizeSerpApi({ job_id: "x", share_link: "https://serpapi.com/share/x" });
+  assert.equal(job.url, "https://serpapi.com/share/x");
+});
+
+test("SerpApi: id is prefixed to prevent dedup collisions", () => {
+  const job = normalizeSerpApi({ job_id: "42" });
+  assert.match(job.id, /^serpapi:/);
+});
