@@ -61,6 +61,8 @@ export const config = {
   web: {
     port: parseInt(optional("WEB_PORT", "3000"), 10),
   },
+  // Jobs scoring at/above this get a ⭐ TOP MATCH priority alert
+  topMatchScore: parseInt(optional("TOP_MATCH_SCORE", "85"), 10),
   schedule: optional("CRON_SCHEDULE", "0 */4 * * *"),
   // Run a catch-up scan shortly after startup (covers ticks missed while
   // the process was down or the machine was asleep)

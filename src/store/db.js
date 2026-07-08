@@ -2,6 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import fs from "node:fs";
 import path from "node:path";
 import { config } from "../config.js";
+import { jobToken } from "../lib/token.js";
 
 fs.mkdirSync(config.paths.data, { recursive: true });
 const db = new DatabaseSync(path.join(config.paths.data, "jobs.db"));
@@ -18,7 +19,8 @@ db.exec(`
     score       INTEGER,
     resume_path TEXT,
     status      TEXT DEFAULT 'new',
-    description TEXT
+    description TEXT,
+    token       TEXT
   );
 `);
 
@@ -28,15 +30,17 @@ for (const col of [
   "ALTER TABLE seen_jobs ADD COLUMN resume_path TEXT",
   "ALTER TABLE seen_jobs ADD COLUMN status      TEXT DEFAULT 'new'",
   "ALTER TABLE seen_jobs ADD COLUMN description TEXT",
+  "ALTER TABLE seen_jobs ADD COLUMN token       TEXT",
 ]) {
   try { db.exec(col); } catch { /* column already exists — ignore */ }
 }
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_token ON seen_jobs(token)"); } catch { /* ignore */ }
 
 // ── Prepared statements ───────────────────────────────────────────────────────
 
 const stmtSelect   = db.prepare("SELECT 1 FROM seen_jobs WHERE id = ?");
 const stmtInsert   = db.prepare(
-  "INSERT OR IGNORE INTO seen_jobs (id, title, company, url) VALUES (?, ?, ?, ?)"
+  "INSERT OR IGNORE INTO seen_jobs (id, title, company, url, token) VALUES (?, ?, ?, ?, ?)"
 );
 const stmtUpdate   = db.prepare(
   "UPDATE seen_jobs SET score = ?, resume_path = ?, description = ? WHERE id = ?"
@@ -51,6 +55,11 @@ const stmtFilter   = db.prepare(
   "SELECT * FROM seen_jobs WHERE status = ? ORDER BY seen_at DESC"
 );
 const stmtOne      = db.prepare("SELECT * FROM seen_jobs WHERE id = ?");
+const stmtByToken  = db.prepare("SELECT * FROM seen_jobs WHERE token = ?");
+const stmtTop      = db.prepare(
+  "SELECT * FROM seen_jobs WHERE score IS NOT NULL AND status != 'skipped' " +
+  "ORDER BY score DESC, seen_at DESC LIMIT ?"
+);
 const stmtCount    = db.prepare("SELECT COUNT(*) as total FROM seen_jobs");
 const stmtCountNew = db.prepare(
   "SELECT COUNT(*) as total FROM seen_jobs WHERE status = 'new'"
@@ -65,7 +74,7 @@ export function isNew(jobId) {
 
 /** Inserts the job into the seen table (no-op if already there). */
 export function markSeen(job) {
-  stmtInsert.run(job.id, job.title, job.company, job.url);
+  stmtInsert.run(job.id, job.title, job.company, job.url, jobToken(job.id));
 }
 
 /** Stores the score, resume path, and description after tailoring. */
@@ -86,6 +95,16 @@ export function getAllJobs(status) {
 /** Returns a single job row by id. */
 export function getJob(id) {
   return stmtOne.get(id) ?? null;
+}
+
+/** Returns a single job row by its short callback token. */
+export function getJobByToken(token) {
+  return stmtByToken.get(token) ?? null;
+}
+
+/** Returns the highest-scoring non-skipped jobs (for /top and digests). */
+export function getTopJobs(limit = 5) {
+  return stmtTop.all(limit);
 }
 
 /** Returns total job count and count of new (unactioned) jobs. */

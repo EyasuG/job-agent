@@ -2,7 +2,9 @@ import fs from "node:fs";
 import { Telegraf } from "telegraf";
 import { config } from "../config.js";
 import { logger } from "../lib/logger.js";
-import { updateJobStatus } from "../store/db.js";
+import { updateJobStatus, getJobByToken, getTopJobs } from "../store/db.js";
+import { jobToken } from "../lib/token.js";
+import { generateApplyKit, renderApplyKit } from "../tailor/applykit.js";
 
 let bot = null;
 
@@ -27,21 +29,28 @@ export async function sendJobNotification(job, tailored, resumePath) {
 
   const score = tailored?.score;
   const coverage = tailored?.keyword_coverage;
+  const isTop = score != null && score >= config.topMatchScore;
+
   let scoreBar = score != null ? ` — Match: ${score}/100` : "";
   if (coverage != null) scoreBar += ` — Keywords: ${coverage}%`;
-  let text = `*${escMd(job.title)}*\n${escMd(job.company)} — ${escMd(job.location)}${escMd(scoreBar)}`;
+
+  let text = "";
+  if (isTop) text += `⭐ *TOP MATCH* ⭐\n`;
+  text += `*${escMd(job.title)}*\n${escMd(job.company)} — ${escMd(job.location)}${escMd(scoreBar)}`;
 
   if (tailored?.unmatched_requirements?.length) {
     text += `\n\n_Gaps:_ ${tailored.unmatched_requirements.map(escMd).join(", ")}`;
   }
 
+  const tok = jobToken(job.id);
   const keyboard = {
     inline_keyboard: [
       [
         { text: "🔗 Open Job", url: job.url },
-        { text: "💾 Save", callback_data: `save:${job.id}` },
-        { text: "⏭ Skip", callback_data: `skip:${job.id}` },
+        { text: "💾 Save", callback_data: `save:${tok}` },
+        { text: "⏭ Skip", callback_data: `skip:${tok}` },
       ],
+      [{ text: "📋 Apply Kit", callback_data: `kit:${tok}` }],
     ],
   };
 
@@ -94,10 +103,32 @@ async function sendDocumentNative(chatId, filePath, filename, caption, keyboard)
 }
 
 /** Builds a readable download filename like "Resume - Acme - React Dev.docx". */
-function friendlyFilename(job) {
+function friendlyFilename(job, kind = "Resume") {
   const clean = (s) => String(s ?? "").replace(/[^a-z0-9 .-]/gi, "").trim().slice(0, 40);
-  const name = `Resume - ${clean(job.company)} - ${clean(job.title)}`.replace(/\s+/g, " ").trim();
-  return `${name || "Resume"}.docx`;
+  const name = `${kind} - ${clean(job.company)} - ${clean(job.title)}`.replace(/\s+/g, " ").trim();
+  return `${name || kind}.docx`;
+}
+
+/**
+ * Generates and delivers an application kit (.docx) for a job to Telegram.
+ * Runs on demand when the user taps the "Apply Kit" button.
+ */
+async function deliverApplyKit(chatId, job) {
+  try {
+    const kit = await generateApplyKit(job);
+    if (!kit) {
+      await getBot().telegram.sendMessage(chatId, "❌ Couldn't generate the apply kit — try again shortly.");
+      return;
+    }
+    const kitPath = await renderApplyKit(job, kit);
+    const caption = `📋 *Apply Kit* — ${escMd(job.title)} @ ${escMd(job.company)}\n_Bracketed \\[…\\] fields need your confirmation before submitting\\._`;
+    const keyboard = { inline_keyboard: [[{ text: "🔗 Open Application", url: job.url }]] };
+    await sendDocumentNative(chatId, kitPath, friendlyFilename(job, "Apply Kit"), caption, keyboard);
+    logger.info(`Apply kit delivered: ${job.title} @ ${job.company}`);
+  } catch (err) {
+    logger.error(`Apply-kit delivery failed for ${job.title}: ${err.message}`);
+    await getBot().telegram.sendMessage(chatId, "❌ Apply kit failed to send.");
+  }
 }
 
 /**
@@ -116,7 +147,9 @@ export function startBot(runPipeline) {
       "👋 Job Agent is running\\!\n\n" +
         "Commands:\n" +
         "/run — trigger a job scan now\n" +
-        "/status — show agent status",
+        "/top — show your highest\\-scoring matches\n" +
+        "/status — show agent status\n\n" +
+        "On each job: 💾 Save, ⏭ Skip, or 📋 Apply Kit \\(pre\\-filled ATS answers\\)\\.",
       { parse_mode: "MarkdownV2" }
     );
   });
@@ -124,6 +157,22 @@ export function startBot(runPipeline) {
   // /status — confirm the agent is alive
   bot.command("status", (ctx) => {
     ctx.reply("✅ Agent is online and scheduled\\.", { parse_mode: "MarkdownV2" });
+  });
+
+  // /top — list the highest-scoring jobs seen so far
+  bot.command("top", async (ctx) => {
+    if (String(ctx.chat.id) !== String(chatId)) return;
+    const jobs = getTopJobs(5);
+    if (!jobs.length) {
+      await ctx.reply("No scored jobs yet — run /run first\\.", { parse_mode: "MarkdownV2" });
+      return;
+    }
+    let msg = "⭐ *Top matches*\n\n";
+    for (const j of jobs) {
+      msg += `*${escMd(j.title)}* — ${escMd(String(j.score))}/100\n` +
+             `${escMd(j.company)}\n[Open](${j.url})\n\n`;
+    }
+    await ctx.reply(msg, { parse_mode: "MarkdownV2", disable_web_page_preview: true });
   });
 
   // /run — manual pipeline trigger (only allowed from the configured chat)
@@ -139,19 +188,23 @@ export function startBot(runPipeline) {
     }
   });
 
-  // Inline button callbacks
+  // Inline button callbacks. callback_data is "<action>:<token>"; the token is
+  // a short hash of the job id (Telegram caps callback_data at 64 bytes).
   bot.on("callback_query", async (ctx) => {
     const data = ctx.callbackQuery.data;
     if (!data) return;
+    const [action, tok] = data.split(":");
+    const job = tok ? getJobByToken(tok) : null;
 
-    if (data.startsWith("save:")) {
-      const jobId = data.slice(5);
-      updateJobStatus(jobId, "saved");
-      await ctx.answerCbQuery("Saved! ✅");
-    } else if (data.startsWith("skip:")) {
-      const jobId = data.slice(5);
-      updateJobStatus(jobId, "skipped");
-      await ctx.answerCbQuery("Skipped.");
+    if (action === "save") {
+      if (job) updateJobStatus(job.id, "saved");
+      await ctx.answerCbQuery(job ? "Saved! ✅" : "Job not found.");
+    } else if (action === "skip") {
+      if (job) updateJobStatus(job.id, "skipped");
+      await ctx.answerCbQuery(job ? "Skipped." : "Job not found.");
+    } else if (action === "kit") {
+      await ctx.answerCbQuery(job ? "Generating your apply kit… 📋" : "Job not found.");
+      if (job) await deliverApplyKit(chatId, job);
     } else {
       await ctx.answerCbQuery();
     }
