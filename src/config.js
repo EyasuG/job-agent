@@ -39,7 +39,7 @@ export const config = {
     // Skip jobs that require a security clearance
     excludeClearance: optional("EXCLUDE_CLEARANCE", "true") === "true",
     // Comma-separated apply-URL domains to drop (low-trust aggregators)
-    blockedDomains: optional("BLOCKED_DOMAINS", "lensa.com")
+    blockedDomains: optional("BLOCKED_DOMAINS", "lensa.com,jobleads.com,recruit.net")
       .split(",")
       .map((d) => d.trim().toLowerCase())
       .filter(Boolean),
