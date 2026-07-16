@@ -36,3 +36,21 @@ export function requiresClearance(job) {
     TITLE_ONLY_PATTERNS.some((re) => re.test(title))
   );
 }
+
+/**
+ * Returns true if the job's apply URL is hosted on (or under) any domain in
+ * the blocklist — used to prune low-trust aggregators like lensa.com. Matches
+ * the exact domain and any subdomain (jobs.lensa.com), and is defensive
+ * against unparseable URLs (falls back to a substring check).
+ */
+export function isBlockedDomain(job, blockedDomains = []) {
+  if (!blockedDomains.length || !job.url) return false;
+  let host;
+  try {
+    host = new URL(job.url).hostname.toLowerCase();
+  } catch {
+    const url = String(job.url).toLowerCase();
+    return blockedDomains.some((d) => url.includes(d));
+  }
+  return blockedDomains.some((d) => host === d || host.endsWith(`.${d}`));
+}

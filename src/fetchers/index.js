@@ -3,7 +3,7 @@ import { fetchJobs as fetchAdzuna } from "./adzuna.js";
 import { fetchJobs as fetchRemotive } from "./remotive.js";
 import { fetchJobs as fetchJooble } from "./jooble.js";
 import { fetchJobs as fetchSerpApi } from "./serpapi.js";
-import { requiresClearance } from "../lib/filters.js";
+import { requiresClearance, isBlockedDomain } from "../lib/filters.js";
 import { config } from "../config.js";
 import { logger } from "../lib/logger.js";
 
@@ -38,15 +38,24 @@ export async function fetchAllJobs() {
     }
   }
 
-  if (!config.jobApi.excludeClearance) {
-    logger.info(`Aggregated ${jobs.length} unique jobs across all sources.`);
-    return jobs;
+  const { excludeClearance, blockedDomains } = config.jobApi;
+  const total = jobs.length;
+
+  // Drop low-trust aggregator domains (e.g. lensa.com)
+  let kept = jobs.filter((j) => !isBlockedDomain(j, blockedDomains));
+  const blocked = total - kept.length;
+
+  // Drop clearance/poly-required roles unless disabled
+  let clearanceDropped = 0;
+  if (excludeClearance) {
+    const before = kept.length;
+    kept = kept.filter((j) => !requiresClearance(j));
+    clearanceDropped = before - kept.length;
   }
 
-  const open = jobs.filter((j) => !requiresClearance(j));
-  const dropped = jobs.length - open.length;
   logger.info(
-    `Aggregated ${jobs.length} unique jobs; ${dropped} clearance-required filtered out, ${open.length} remain.`
+    `Aggregated ${total} unique jobs; ${blocked} blocked-domain, ` +
+      `${clearanceDropped} clearance-required filtered out, ${kept.length} remain.`
   );
-  return open;
+  return kept;
 }

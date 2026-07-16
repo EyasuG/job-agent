@@ -38,6 +38,11 @@ export const config = {
     datePosted: optional("JOB_DATE_POSTED", "week"),
     // Skip jobs that require a security clearance
     excludeClearance: optional("EXCLUDE_CLEARANCE", "true") === "true",
+    // Comma-separated apply-URL domains to drop (low-trust aggregators)
+    blockedDomains: optional("BLOCKED_DOMAINS", "lensa.com")
+      .split(",")
+      .map((d) => d.trim().toLowerCase())
+      .filter(Boolean),
   },
   llm: {
     // Primary AI backend: gemini | groq | ollama | openrouter | anthropic

@@ -3,7 +3,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { requiresClearance } from "../src/lib/filters.js";
+import { requiresClearance, isBlockedDomain } from "../src/lib/filters.js";
 
 test("flags 'Top Secret' in title", () => {
   assert.ok(requiresClearance({ title: "Senior Software Developer (Top Secret Cleared)", description: "" }));
@@ -124,4 +124,27 @@ test("drops Europe-only jobs", () => {
 
 test("keeps mixed 'Canada, USA' jobs", () => {
   assert.ok(isUsEligible({ candidate_required_location: "Canada, USA" }));
+});
+
+// ── Blocked-domain filter ─────────────────────────────────────────────────────
+const BLOCK = ["lensa.com", "jobleads.com"];
+
+test("blocks an exact blocked domain", () => {
+  assert.ok(isBlockedDomain({ url: "https://lensa.com/job/123" }, BLOCK));
+});
+test("blocks a subdomain of a blocked domain", () => {
+  assert.ok(isBlockedDomain({ url: "https://jobs.lensa.com/apply/9" }, BLOCK));
+});
+test("does NOT block a non-listed domain", () => {
+  assert.equal(isBlockedDomain({ url: "https://www.indeed.com/viewjob?jk=1" }, BLOCK), false);
+});
+test("does NOT block a lookalike domain (notlensa.com)", () => {
+  assert.equal(isBlockedDomain({ url: "https://notlensa.com/job/1" }, BLOCK), false);
+});
+test("handles missing url and empty blocklist", () => {
+  assert.equal(isBlockedDomain({ url: "" }, BLOCK), false);
+  assert.equal(isBlockedDomain({ url: "https://lensa.com/x" }, []), false);
+});
+test("falls back to substring match for unparseable urls", () => {
+  assert.ok(isBlockedDomain({ url: "lensa.com/job/no-scheme" }, BLOCK));
 });
