@@ -3,7 +3,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { requiresClearance, isBlockedDomain } from "../src/lib/filters.js";
+import { requiresClearance, isBlockedDomain, isExcludedRole } from "../src/lib/filters.js";
 
 test("flags 'Top Secret' in title", () => {
   assert.ok(requiresClearance({ title: "Senior Software Developer (Top Secret Cleared)", description: "" }));
@@ -147,4 +147,35 @@ test("handles missing url and empty blocklist", () => {
 });
 test("falls back to substring match for unparseable urls", () => {
   assert.ok(isBlockedDomain({ url: "lensa.com/job/no-scheme" }, BLOCK));
+});
+
+// ── Excluded-role filter (target FDE/full-stack/front-end, drop DevOps) ────────
+const EXCLUDED = ["devops", "site reliability", "sre", "platform engineer", "infrastructure engineer"];
+
+test("drops a DevOps Engineer title", () => {
+  assert.ok(isExcludedRole({ title: "Senior DevOps Engineer" }, EXCLUDED));
+});
+test("drops SRE and Site Reliability titles", () => {
+  assert.ok(isExcludedRole({ title: "SRE II" }, EXCLUDED));
+  assert.ok(isExcludedRole({ title: "Site Reliability Engineer" }, EXCLUDED));
+});
+test("drops Platform / Infrastructure Engineer titles", () => {
+  assert.ok(isExcludedRole({ title: "Platform Engineer" }, EXCLUDED));
+  assert.ok(isExcludedRole({ title: "Infrastructure Engineer" }, EXCLUDED));
+});
+test("KEEPS Forward Deployed / Full-Stack / Front-End titles", () => {
+  assert.equal(isExcludedRole({ title: "Forward Deployed Engineer" }, EXCLUDED), false);
+  assert.equal(isExcludedRole({ title: "Full Stack Developer" }, EXCLUDED), false);
+  assert.equal(isExcludedRole({ title: "Front End Developer (React)" }, EXCLUDED), false);
+});
+test("does NOT drop a frontend job that merely mentions devops in the description", () => {
+  assert.equal(isExcludedRole({ title: "React Engineer", description: "Work with the DevOps team on CI/CD." }, EXCLUDED), false);
+});
+test("empty excluded list keeps everything", () => {
+  assert.equal(isExcludedRole({ title: "DevOps Engineer" }, []), false);
+});
+test("drops '-ing' role variants (Infrastructure/Platform Engineering)", () => {
+  const ex = ["infrastructure engineering", "platform engineering"];
+  assert.ok(isExcludedRole({ title: "Director, Core Infrastructure Engineering" }, ex));
+  assert.ok(isExcludedRole({ title: "Platform Engineering Lead" }, ex));
 });

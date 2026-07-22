@@ -3,7 +3,7 @@ import { fetchJobs as fetchAdzuna } from "./adzuna.js";
 import { fetchJobs as fetchRemotive } from "./remotive.js";
 import { fetchJobs as fetchJooble } from "./jooble.js";
 import { fetchJobs as fetchSerpApi } from "./serpapi.js";
-import { requiresClearance, isBlockedDomain } from "../lib/filters.js";
+import { requiresClearance, isBlockedDomain, isExcludedRole } from "../lib/filters.js";
 import { config } from "../config.js";
 import { logger } from "../lib/logger.js";
 
@@ -38,12 +38,20 @@ export async function fetchAllJobs() {
     }
   }
 
-  const { excludeClearance, blockedDomains } = config.jobApi;
+  const { excludeClearance, blockedDomains, excludedRoles } = config.jobApi;
   const total = jobs.length;
 
   // Drop low-trust aggregator domains (e.g. lensa.com)
   let kept = jobs.filter((j) => !isBlockedDomain(j, blockedDomains));
   const blocked = total - kept.length;
+
+  // Drop role families the candidate isn't targeting (e.g. DevOps/SRE)
+  let roleDropped = 0;
+  {
+    const before = kept.length;
+    kept = kept.filter((j) => !isExcludedRole(j, excludedRoles));
+    roleDropped = before - kept.length;
+  }
 
   // Drop clearance/poly-required roles unless disabled
   let clearanceDropped = 0;
@@ -55,7 +63,8 @@ export async function fetchAllJobs() {
 
   logger.info(
     `Aggregated ${total} unique jobs; ${blocked} blocked-domain, ` +
-      `${clearanceDropped} clearance-required filtered out, ${kept.length} remain.`
+      `${roleDropped} excluded-role, ${clearanceDropped} clearance-required ` +
+      `filtered out, ${kept.length} remain.`
   );
   return kept;
 }
