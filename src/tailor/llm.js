@@ -105,6 +105,9 @@ async function callProvider(provider, { systemStable, systemCacheable, user, max
         { role: "user", content: user },
       ],
       response_format: { type: "json_object" },
+      // Gemini 2.5 models "think" by default, consuming the output-token
+      // budget and truncating the JSON. Disable it so all tokens go to output.
+      ...(provider === "gemini" ? { reasoning_effort: "none" } : {}),
     }),
   });
 
