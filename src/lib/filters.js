@@ -37,6 +37,23 @@ export function requiresClearance(job) {
   );
 }
 
+function escapeRegex(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Returns true if the job TITLE contains any excluded role keyword — used to
+ * drop role families the candidate isn't targeting (e.g. DevOps/SRE) while
+ * keeping Forward Deployed / Full-Stack / Front-End roles. Matched on the title
+ * only (with word boundaries) so a frontend job that merely mentions
+ * "collaborate with the DevOps team" in its description is not dropped.
+ */
+export function isExcludedRole(job, keywords = []) {
+  if (!keywords.length) return false;
+  const title = job.title ?? "";
+  return keywords.some((k) => new RegExp(`\\b${escapeRegex(k)}\\b`, "i").test(title));
+}
+
 /**
  * Returns true if the job's apply URL is hosted on (or under) any domain in
  * the blocklist — used to prune low-trust aggregators like lensa.com. Matches

@@ -43,6 +43,11 @@ export const config = {
       .split(",")
       .map((d) => d.trim().toLowerCase())
       .filter(Boolean),
+    // Comma-separated role keywords to exclude by title (not targeting these)
+    excludedRoles: optional("EXCLUDED_ROLES", "devops,site reliability,sre,platform engineer,platform engineering,infrastructure engineer,infrastructure engineering")
+      .split(",")
+      .map((r) => r.trim())
+      .filter(Boolean),
   },
   llm: {
     // Primary AI backend: gemini | groq | ollama | openrouter | anthropic
