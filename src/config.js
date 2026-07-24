@@ -29,6 +29,9 @@ export const config = {
     // Monthly SerpApi search cap; the fetcher stops calling once hit so the
     // free tier (250/mo) is never exceeded. Set below 250 for headroom.
     serpApiMonthlyLimit: parseInt(optional("SERPAPI_MONTHLY_LIMIT", "240"), 10),
+    // Minimum hours between SerpApi runs — paces the budget across the month
+    // (24 = once/day). Other sources still run every scan.
+    serpApiMinIntervalHours: parseInt(optional("SERPAPI_MIN_INTERVAL_HOURS", "24"), 10),
     // Comma-separated list of search queries; each fetcher runs all of them
     queries: optional("JOB_QUERIES", "javascript developer,devops engineer")
       .split(",")

@@ -10,10 +10,14 @@ const USAGE_FILE = path.join(config.paths.data, "serpapi-usage.json");
 // and returns a normalized array. Google Jobs aggregates Indeed, ZipRecruiter,
 // LinkedIn and others, so this is the closest legitimate source to those boards.
 //
-// A monthly budget guard (SERPAPI_MONTHLY_LIMIT) stops calls once the free-tier
-// quota is nearly used, so we never overshoot the 250/mo free plan.
+// Two guards keep this within the 250/mo free tier:
+//   1. SERPAPI_MIN_INTERVAL_HOURS paces runs (default 24h = once/day) so the
+//      budget spreads across the whole month instead of burning out early.
+//   2. SERPAPI_MONTHLY_LIMIT is a hard backstop that stops calls entirely.
+// When throttled or capped, the other sources still cover the run.
 export async function fetchJobs() {
-  const { serpApiKey, serpApiMonthlyLimit, queries, location } = config.jobApi;
+  const { serpApiKey, serpApiMonthlyLimit, serpApiMinIntervalHours, queries, location } =
+    config.jobApi;
 
   if (!serpApiKey) {
     logger.warn("SERPAPI_KEY not set — skipping SerpApi.");
@@ -21,6 +25,18 @@ export async function fetchJobs() {
   }
 
   const usage = readUsage();
+
+  // Pace runs: skip if the last SerpApi run was too recent.
+  const intervalMs = serpApiMinIntervalHours * 3600 * 1000;
+  if (usage.lastRunAt && Date.now() - usage.lastRunAt < intervalMs) {
+    const hrsAgo = ((Date.now() - usage.lastRunAt) / 3600000).toFixed(1);
+    logger.info(
+      `SerpApi throttled — last run ${hrsAgo}h ago (min ${serpApiMinIntervalHours}h). ` +
+        `Skipping to spread the ${usage.count}/${serpApiMonthlyLimit} monthly budget.`
+    );
+    return [];
+  }
+
   const jobs = [];
 
   for (const query of queries) {
@@ -50,6 +66,8 @@ export async function fetchJobs() {
     jobs.push(...(data.jobs_results ?? []).map(normalize));
   }
 
+  usage.lastRunAt = Date.now();
+  writeUsage(usage);
   logger.info(`SerpApi: ${usage.count}/${serpApiMonthlyLimit} searches used this month.`);
   return jobs;
 }
@@ -80,7 +98,7 @@ function readUsage() {
   } catch {
     /* missing or unreadable — start fresh */
   }
-  return { month: currentMonth(), count: 0 };
+  return { month: currentMonth(), count: 0, lastRunAt: 0 };
 }
 
 function writeUsage(usage) {
