@@ -131,12 +131,16 @@ function buildSummary(tailoredSummary, masterSummary) {
   ];
 }
 
-function buildExperience(master, tailoredBullets) {
+function buildExperience(master, tailoredRoles) {
   const experience = master.experience ?? [];
   if (!experience.length) return [];
 
-  // Pool of tailored bullets to distribute across roles (most relevant first)
-  const bulletPool = [...(tailoredBullets ?? [])];
+  // Map tailored bullets to their company so each role keeps its OWN
+  // accomplishments (case-insensitive match on company name).
+  const byCompany = new Map();
+  for (const r of tailoredRoles ?? []) {
+    if (r?.company) byCompany.set(String(r.company).toLowerCase().trim(), r.bullets ?? []);
+  }
 
   const paragraphs = [sectionHeading("Experience"), sectionDivider()];
 
@@ -166,10 +170,25 @@ function buildExperience(master, tailoredBullets) {
       })
     );
 
-    // Bullets: prefer tailored ones from the pool, fall back to master bullets
-    const roleBullets = bulletPool.length > 0 ? bulletPool.splice(0, 4) : (role.bullets ?? []);
+    // Bullets: use THIS role's tailored bullets (matched by company), else its
+    // own master bullets. Never borrow another role's accomplishments.
+    const tailored = byCompany.get(String(role.company).toLowerCase().trim());
+    const roleBullets = tailored?.length ? tailored : (role.bullets ?? []);
     for (const b of roleBullets) {
       paragraphs.push(bullet(b));
+    }
+
+    // Tech stack line for the role, so the full stack is always visible.
+    if (role.environment) {
+      paragraphs.push(
+        new Paragraph({
+          children: [
+            new TextRun({ text: "Tech: ", bold: true, font: FONT, size: SIZE_BODY, color: COLOR_MUTED }),
+            new TextRun({ text: role.environment, font: FONT, size: SIZE_BODY, color: COLOR_MUTED }),
+          ],
+          spacing: { before: 20, after: 0 },
+        })
+      );
     }
 
     paragraphs.push(new Paragraph({ spacing: { after: SPACE_AFTER_SECTION } }));
@@ -233,7 +252,7 @@ export async function renderResume(job, tailored) {
   const children = [
     ...buildHeader(master),
     ...buildSummary(tailored?.summary, master.summary),
-    ...buildExperience(master, tailored?.tailored_bullets),
+    ...buildExperience(master, tailored?.roles),
     ...buildSkills(master),
     ...buildEducation(master),
   ];

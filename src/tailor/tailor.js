@@ -13,29 +13,32 @@ Never invent skills, employers, dates, titles, or achievements.
 
 Given a job description, maximize keyword alignment between the resume and the posting:
 1. Extract the job's key terms: technologies, tools, methodologies, soft skills, and role-specific vocabulary.
-2. Select and reorder the most relevant existing bullets from the master resume.
-3. Rephrase each bullet to mirror the job's EXACT terminology wherever the underlying
-   fact genuinely supports it (e.g. if the resume says "built REST APIs in Node.js" and
-   the job says "Node.js microservices and RESTful services", use the job's phrasing).
-   Never stretch a fact beyond what it states.
-4. CREDIT TRANSFERABLE EQUIVALENTS: when the resume demonstrates a directly equivalent
-   technology or practice, count it as a match and phrase it bridgingly — e.g.
-   Terraform experience satisfies "infrastructure as code"; PCF/UCD deployments satisfy
-   "CI/CD pipelines"; Okta SSO satisfies "identity and access management"; AWS Lambda +
-   API Gateway satisfies "serverless architecture"; Express APIs satisfy "microservices
-   experience" only if described as services, not monolith work. Do NOT claim the named
-   tool itself if the resume lacks it — bridge honestly ("infrastructure as code with
-   Terraform"), and still list the literal tool under missing_keywords when absent.
-5. Target keyword_coverage of 90-97% whenever the resume's facts genuinely support it;
-   prioritize working the job's terms into the summary and bullets over generic phrasing.
-6. Write a summary that front-loads the job's highest-priority keywords that the
-   candidate genuinely has.
-7. List job requirements NOT supported by the master resume — do not paper over gaps.
-8. Score 0-100 how well the candidate's background matches the role, crediting
-   transferable equivalents per rule 4.
+2. TAILOR EACH ROLE IN PLACE. For every role in the master resume, rewrite THAT role's own
+   bullets and keep them under THAT SAME company. Never move an accomplishment from one
+   employer to another, and never merge roles.
+3. PRESERVE EACH ROLE'S FULL TECHNICAL RICHNESS. Rewrite to emphasize the technologies and
+   responsibilities that match the job, but keep every substantive accomplishment of the
+   role. Critically: if a role's master bullets list front-end frameworks/languages (React,
+   Angular, Bootstrap, CSS, etc.), those MUST appear in that role's tailored bullets — never
+   collapse a front-end/full-stack role down to a minor detail like version control. Lead
+   each role with its most job-relevant bullet; keep the role's tech stack visible.
+4. Rephrase bullets to mirror the job's EXACT terminology wherever the underlying fact
+   genuinely supports it (e.g. resume "built REST APIs in Node.js" + job "RESTful services"
+   -> use the job's phrasing). Never stretch a fact beyond what it states.
+5. CREDIT TRANSFERABLE EQUIVALENTS with honest bridging language — Terraform satisfies
+   "infrastructure as code"; PCF/UCD satisfy "CI/CD pipelines"; Okta SSO satisfies
+   "identity/access management"; AWS Lambda + API Gateway satisfy "serverless". Do NOT
+   claim a named tool the resume lacks; list literal missing tools under missing_keywords.
+6. Target keyword_coverage of 90-97% when the resume's facts genuinely support it.
+7. Write a summary that front-loads the job's highest-priority keywords the candidate has.
+8. List job requirements NOT supported by the resume — do not paper over gaps.
+9. Score 0-100 how well the candidate matches, crediting transferable equivalents (rule 5).
+
+"roles" MUST contain one entry per master-resume role, using the EXACT company name from
+the resume, with that role's tailored bullets.
 
 Respond with ONLY valid JSON, no markdown fences, in exactly this shape:
-{"score": number, "keyword_coverage": number, "missing_keywords": string[], "summary": string, "tailored_bullets": string[], "unmatched_requirements": string[]}`;
+{"score": number, "keyword_coverage": number, "missing_keywords": string[], "summary": string, "roles": [{"company": string, "bullets": string[]}], "unmatched_requirements": string[]}`;
 
 export async function tailorResume(job) {
   if (!llmConfigured()) {
