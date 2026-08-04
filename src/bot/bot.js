@@ -5,6 +5,7 @@ import { logger } from "../lib/logger.js";
 import { updateJobStatus, getJobByToken, getTopJobs } from "../store/db.js";
 import { jobToken } from "../lib/token.js";
 import { generateApplyKit, renderApplyKit } from "../tailor/applykit.js";
+import { generateCoverLetter, renderCoverLetter } from "../tailor/coverletter.js";
 
 let bot = null;
 
@@ -50,7 +51,10 @@ export async function sendJobNotification(job, tailored, resumePath) {
         { text: "💾 Save", callback_data: `save:${tok}` },
         { text: "⏭ Skip", callback_data: `skip:${tok}` },
       ],
-      [{ text: "📋 Apply Kit", callback_data: `kit:${tok}` }],
+      [
+        { text: "📄 Cover Letter", callback_data: `cl:${tok}` },
+        { text: "📋 Apply Kit", callback_data: `kit:${tok}` },
+      ],
     ],
   };
 
@@ -132,6 +136,28 @@ async function deliverApplyKit(chatId, job) {
 }
 
 /**
+ * Generates and delivers a tailored one-page cover letter (.docx) for a job.
+ * Runs on demand when the user taps the "Cover Letter" button.
+ */
+async function deliverCoverLetter(chatId, job) {
+  try {
+    const letter = await generateCoverLetter(job);
+    if (!letter) {
+      await getBot().telegram.sendMessage(chatId, "❌ Couldn't generate the cover letter — try again shortly.");
+      return;
+    }
+    const clPath = await renderCoverLetter(job, letter);
+    const caption = `📄 *Cover Letter* — ${escMd(job.title)} @ ${escMd(job.company)}`;
+    const keyboard = { inline_keyboard: [[{ text: "🔗 Open Job", url: job.url }]] };
+    await sendDocumentNative(chatId, clPath, friendlyFilename(job, "Cover Letter"), caption, keyboard);
+    logger.info(`Cover letter delivered: ${job.title} @ ${job.company}`);
+  } catch (err) {
+    logger.error(`Cover-letter delivery failed for ${job.title}: ${err.message}`);
+    await getBot().telegram.sendMessage(chatId, "❌ Cover letter failed to send.");
+  }
+}
+
+/**
  * Starts the Telegraf bot: registers command and callback handlers, then
  * launches polling. Returns the bot instance.
  *
@@ -149,7 +175,7 @@ export function startBot(runPipeline) {
         "/run — trigger a job scan now\n" +
         "/top — show your highest\\-scoring matches\n" +
         "/status — show agent status\n\n" +
-        "On each job: 💾 Save, ⏭ Skip, or 📋 Apply Kit \\(pre\\-filled ATS answers\\)\\.",
+        "On each job: 💾 Save · ⏭ Skip · 📄 Cover Letter · 📋 Apply Kit\\.",
       { parse_mode: "MarkdownV2" }
     );
   });
@@ -205,6 +231,9 @@ export function startBot(runPipeline) {
     } else if (action === "kit") {
       await ctx.answerCbQuery(job ? "Generating your apply kit… 📋" : "Job not found.");
       if (job) await deliverApplyKit(chatId, job);
+    } else if (action === "cl") {
+      await ctx.answerCbQuery(job ? "Writing your cover letter… 📄" : "Job not found.");
+      if (job) await deliverCoverLetter(chatId, job);
     } else {
       await ctx.answerCbQuery();
     }
