@@ -13,8 +13,8 @@ A personal, single-user **AI job-search agent** that runs on a schedule and:
 4. **Renders** the tailored resume to a `.docx` file.
 5. **Notifies** the user on Telegram with the job, a link, and the resume path.
 
-The user is a JavaScript engineer reskilling to re-enter the workforce, targeting the
-US DMV (DC / Maryland / Virginia) area. This is a learning project as much as a tool —
+The user is a JavaScript / full-stack engineer targeting software roles nationwide
+(onsite, hybrid, and remote across the US). This is a learning project as much as a tool —
 prefer clear, well-commented, idiomatic code over clever abstractions.
 
 ## 2. Hard constraints (do not violate)
@@ -30,6 +30,28 @@ prefer clear, well-commented, idiomatic code over clever abstractions.
 - **No auto-applying.** This tool surfaces and drafts; the human reviews and applies.
   Do not add functionality that submits applications automatically.
 - **Secrets stay in `.env`.** Never hardcode keys. Never commit `.env`, `data/`, or `output/`.
+
+## 2a. Resume-prep protocol (apply to EVERY tailoring)
+
+Whenever the resume is tailored to a specific posting — interactively with the
+user OR in the automated pipeline — follow these three steps:
+
+1. **Mirror the company's success language.** Pull every phrase the posting uses
+   to describe success, impact, and what a strong performer does, and list each
+   one next to the candidate's closest-matching `master.json` bullet. That
+   mapping drives the rewrite.
+2. **Rewrite in their exact words — truthfully.** Rephrase the matched bullets to
+   use the posting's terminology. Never lie about or inflate what the candidate
+   did; optimize the *description*, not the facts (this reinforces the
+   no-fabrication constraint in §2). When working **interactively**, ask the user
+   clarifying questions to surface real details that justify stronger phrasing
+   before rewriting. The **scheduled pipeline** cannot ask, so it stays strictly
+   within existing `master.json` facts and surfaces any gap under
+   `unmatched_requirements`.
+3. **Score the language overlap.** Report the overlap between the tailored resume
+   and the posting as a percentage and **flag anything below 70%** for revision.
+   In the pipeline this is the `keyword_coverage` field returned by
+   `src/tailor/tailor.js`; treat coverage < 70 as a flag to revise.
 
 ## 3. Tech stack
 
@@ -113,9 +135,14 @@ github.com/EyasuG/job-agent (branch `jobReady`):
   processed 3-at-a-time with p-limit. Failed tailoring is retried next run.
 - **Job sources** (4): JSearch + Adzuna (live), Remotive (live, US-eligible only),
   Jooble (activates when JOOBLE_API_KEY is set). Multi-query via JOB_QUERIES
-  (currently "javascript developer,devops engineer").
+  (currently "forward deployed engineer,full stack developer,front end developer";
+  location nationwide via JOB_LOCATION="United States"; date window: month).
 - **Curation**: clearance-required jobs filtered out (EXCLUDE_CLEARANCE=true);
-  jobs below MIN_MATCH_SCORE are silently skipped and marked seen.
+  DevOps/SRE/platform/infra titles dropped via EXCLUDED_ROLES; jobs below
+  MIN_MATCH_SCORE (the record floor) are discarded and marked seen. A separate
+  NOTIFY_MATCH_SCORE gates Telegram alerts: jobs in the band
+  [MIN_MATCH_SCORE, NOTIFY_MATCH_SCORE) are stored for dashboard review but not
+  alerted; NOTIFY_MATCH_SCORE defaults to MIN_MATCH_SCORE until set higher.
 - **Telegram bot** (telegraf): /start /status /run commands; Save/Skip inline
   buttons persist status to the DB shared with the dashboard.
 - **Web dashboard** (Express + vanilla JS, port 3000): jobs table with search and

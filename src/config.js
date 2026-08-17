@@ -37,8 +37,10 @@ export const config = {
       .split(",")
       .map((q) => q.trim())
       .filter(Boolean),
-    location: optional("JOB_LOCATION", "Washington, DC"),
-    datePosted: optional("JOB_DATE_POSTED", "week"),
+    // "United States" (or USA/nationwide/remote/anywhere) searches the whole
+    // country — onsite, hybrid, and remote. Name a city/region to narrow it.
+    location: optional("JOB_LOCATION", "United States"),
+    datePosted: optional("JOB_DATE_POSTED", "month"),
     // Skip jobs that require a security clearance
     excludeClearance: optional("EXCLUDE_CLEARANCE", "true") === "true",
     // Comma-separated apply-URL domains to drop (low-trust aggregators)
@@ -67,7 +69,18 @@ export const config = {
     model: optional("LLM_MODEL", ""),
     // Model used only when provider === "anthropic"
     anthropicModel: optional("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
+    // Record floor: jobs scoring below this are discarded and never stored.
+    // Jobs at/above it are kept (scored + saved) so they're reviewable on the
+    // dashboard, even when they don't clear the notify gate below.
     minMatchScore: parseInt(optional("MIN_MATCH_SCORE", "50"), 10),
+    // Notify gate: only jobs at/above this score trigger a Telegram alert.
+    // The band [minMatchScore, notifyMatchScore) is stored silently for review.
+    // Defaults to minMatchScore when unset, preserving the old "notify on every
+    // recorded job" behavior until you opt into a stricter inbox.
+    notifyMatchScore: parseInt(
+      optional("NOTIFY_MATCH_SCORE", optional("MIN_MATCH_SCORE", "50")),
+      10
+    ),
     // Minimum resume-skill hits in a posting before it's worth an API call
     prescreenMinMatches: parseInt(optional("PRESCREEN_MIN_MATCHES", "2"), 10),
   },

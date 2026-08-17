@@ -3,7 +3,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { requiresClearance, isBlockedDomain, isExcludedRole } from "../src/lib/filters.js";
+import { requiresClearance, isBlockedDomain, isExcludedRole, isNationwide } from "../src/lib/filters.js";
 
 test("flags 'Top Secret' in title", () => {
   assert.ok(requiresClearance({ title: "Senior Software Developer (Top Secret Cleared)", description: "" }));
@@ -178,4 +178,16 @@ test("drops '-ing' role variants (Infrastructure/Platform Engineering)", () => {
   const ex = ["infrastructure engineering", "platform engineering"];
   assert.ok(isExcludedRole({ title: "Director, Core Infrastructure Engineering" }, ex));
   assert.ok(isExcludedRole({ title: "Platform Engineering Lead" }, ex));
+});
+
+// ── Nationwide location sentinel ─────────────────────────────────────────────
+test("treats United States / USA / nationwide / remote / anywhere as nationwide", () => {
+  for (const v of ["United States", "united states", "USA", "U.S.A.", "us", "nationwide", "Remote", "anywhere", "  USA  "]) {
+    assert.ok(isNationwide(v), `expected nationwide: ${v}`);
+  }
+});
+test("treats a specific city/region as NOT nationwide", () => {
+  for (const v of ["Washington, DC", "New York", "Austin, TX", ""]) {
+    assert.equal(isNationwide(v), false, `expected not nationwide: ${v}`);
+  }
 });

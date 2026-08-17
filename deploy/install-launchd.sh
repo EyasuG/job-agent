@@ -28,29 +28,21 @@ fi
 
 mkdir -p "$LOG_DIR"
 
-# Read .env and build <dict> entries for EnvironmentVariables
-ENV_ENTRIES=""
-while IFS= read -r line || [ -n "$line" ]; do
-  # Skip comments and blank lines
-  [[ "$line" =~ ^#.*$ ]] && continue
-  [[ -z "$line" ]] && continue
-  KEY="${line%%=*}"
-  VALUE="${line#*=}"
-  # Strip inline comments from value
-  VALUE="${VALUE%%#*}"
-  VALUE="${VALUE%"${VALUE##*[![:space:]]}"}" # rtrim
-  ENV_ENTRIES="${ENV_ENTRIES}    <key>${KEY}</key>\n    <string>${VALUE}</string>\n"
-done < "$PROJECT_DIR/.env"
-
 sed \
   -e "s|NODE_PATH_PLACEHOLDER|${NODE_BIN}|g" \
   -e "s|PROJECT_PATH_PLACEHOLDER|${PROJECT_DIR}|g" \
   "$PROJECT_DIR/deploy/com.jobagent.plist" \
   > /tmp/${PLIST_NAME}.plist
 
-# Inject the .env vars into the EnvironmentVariables dict
+# Inject the .env vars into the EnvironmentVariables dict.
+# Parse .env directly (KEY=VALUE) rather than shell-sourcing it: `source` breaks
+# on values containing spaces (JOB_QUERIES, JOB_LOCATION, EXCLUDED_ROLES,
+# CRON_SCHEDULE) — bash treats the second word as a command — and would also
+# drag every unrelated system var into the plist. This mirrors how dotenv parses
+# the file at runtime: strip surrounding quotes, and strip inline comments only
+# on unquoted values.
 python3 - <<PYEOF
-import plistlib, pathlib
+import plistlib, pathlib, re
 
 path = pathlib.Path("/tmp/${PLIST_NAME}.plist")
 with open(path, "rb") as f:
@@ -58,16 +50,18 @@ with open(path, "rb") as f:
 
 env = data.get("EnvironmentVariables", {})
 
-import subprocess, shlex
-result = subprocess.run(
-    ["bash", "-c", "set -a && source '${PROJECT_DIR}/.env' && set +a && env"],
-    capture_output=True, text=True
-)
-for line in result.stdout.splitlines():
-    if "=" in line:
-        k, _, v = line.partition("=")
-        # Only include keys from .env (skip system vars)
-        env[k] = v
+for raw in pathlib.Path("${PROJECT_DIR}/.env").read_text().splitlines():
+    line = raw.strip()
+    if not line or line.startswith("#") or "=" not in line:
+        continue
+    key, _, val = line.partition("=")
+    key = key.strip()
+    val = val.strip()
+    if len(val) >= 2 and val[0] == val[-1] and val[0] in "\"'":
+        val = val[1:-1]                          # quoted: keep contents verbatim
+    else:
+        val = re.sub(r"\s+#.*$", "", val).strip()  # unquoted: drop inline comment
+    env[key] = val
 
 data["EnvironmentVariables"] = env
 with open(path, "wb") as f:

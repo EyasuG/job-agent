@@ -89,6 +89,15 @@ nano resume/master.json          # fill in your real details
 
 ### 2. Install the service
 
+> **`.env` formatting for systemd.** systemd's `EnvironmentFile` only treats a
+> `#` at the *start* of a line as a comment and does not run a shell, so keep
+> comments on their own lines (never inline after a value) and wrap any value
+> containing spaces in double quotes — e.g. `JOB_QUERIES="forward deployed
+> engineer,full stack developer,front end developer"`, `CRON_SCHEDULE="0 */4 * *
+> *"`. The shipped `.env.example` already follows this; copy its style when
+> adding keys. (The Node app and the macOS installer parse the file more
+> leniently, but this style is safe for all three.)
+
 Edit `deploy/job-agent.service` and replace `YOUR_LINUX_USER` with your actual username, then:
 
 ```bash
@@ -135,5 +144,7 @@ See `.env.example` for the full list. The required ones to get started:
 | `RAPIDAPI_KEY` | one of these | JSearch job source |
 | `ADZUNA_APP_ID` + `ADZUNA_API_KEY` | one of these | Adzuna job source |
 | `ANTHROPIC_API_KEY` | ✅ | Resume tailoring |
-| `MIN_MATCH_SCORE` | ❌ | Default 50. Lower = more noise, higher = fewer alerts |
+| `MIN_MATCH_SCORE` | ❌ | Default 50. Record floor — jobs below this are discarded and never stored |
+| `NOTIFY_MATCH_SCORE` | ❌ | Notify gate — only jobs at/above this send a Telegram alert; scores in `[MIN_MATCH_SCORE, this)` are stored silently for dashboard review. Defaults to `MIN_MATCH_SCORE` |
+| `JOB_LOCATION` | ❌ | Default `United States` (nationwide: onsite + hybrid + remote); name a city/region to narrow |
 | `CRON_SCHEDULE` | ❌ | Default `0 */4 * * *` (every 4 hours) |

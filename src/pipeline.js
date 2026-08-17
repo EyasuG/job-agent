@@ -24,20 +24,36 @@ async function processJob(job) {
     return;
   }
 
-  if (tailored) {
-    const score = tailored.score ?? 0;
-    if (score < config.llm.minMatchScore) {
-      logger.info(`Skipping ${job.title} @ ${job.company} — score ${score} below threshold.`);
-      markSeen(job);
-      return;
-    }
+  const score = tailored?.score ?? 0;
+
+  // Below the record floor: permanently irrelevant. Mark seen and discard
+  // without storing details or spending a render on it.
+  if (tailored && score < config.llm.minMatchScore) {
+    logger.info(
+      `Discarding ${job.title} @ ${job.company} — score ${score} below record floor ${config.llm.minMatchScore}.`
+    );
+    markSeen(job);
+    return;
   }
 
+  // At/above the record floor (or no LLM configured): render + persist so the
+  // job is always reviewable on the dashboard. Store before notifying so an
+  // instant Save/Skip tap never races an un-inserted row.
   const resumePath = tailored ? await renderResume(job, tailored) : null;
-  await sendJobNotification(job, tailored, resumePath);
   markSeen(job);
   updateJobDetails(job.id, tailored?.score ?? null, resumePath, job.description ?? null);
-  logger.info(`Notified: ${job.title} @ ${job.company} (score: ${tailored?.score ?? "n/a"})`);
+
+  // Notify gate: only jobs at/above notifyMatchScore reach Telegram. The middle
+  // band [minMatchScore, notifyMatchScore) is stored silently for dashboard
+  // review. With no LLM there's no score, so fall back to notifying.
+  if (!tailored || score >= config.llm.notifyMatchScore) {
+    await sendJobNotification(job, tailored, resumePath);
+    logger.info(`Notified: ${job.title} @ ${job.company} (score: ${tailored?.score ?? "n/a"})`);
+  } else {
+    logger.info(
+      `Recorded (no alert): ${job.title} @ ${job.company} (score: ${score}) — below notify gate ${config.llm.notifyMatchScore}.`
+    );
+  }
 }
 
 export async function runOnce() {

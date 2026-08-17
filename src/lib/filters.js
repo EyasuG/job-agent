@@ -54,6 +54,15 @@ export function isExcludedRole(job, keywords = []) {
   return keywords.some((k) => new RegExp(`\\b${escapeRegex(k)}\\b`, "i").test(title));
 }
 
+// Sentinel location values that mean "search the whole US, not a specific
+// city/region". Used to widen the net to nationwide (hybrid + remote + onsite).
+const NATIONWIDE = /^\s*(?:united\s+states|u\.?s\.?a?\.?|nationwide|anywhere|remote)\s*$/i;
+
+/** True when the configured location means nationwide rather than a specific place. */
+export function isNationwide(location = "") {
+  return NATIONWIDE.test(location);
+}
+
 /**
  * Returns true if the job's apply URL is hosted on (or under) any domain in
  * the blocklist — used to prune low-trust aggregators like lensa.com. Matches

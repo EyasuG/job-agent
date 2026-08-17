@@ -1,4 +1,5 @@
 import { config } from "../config.js";
+import { isNationwide } from "../lib/filters.js";
 import { logger } from "../lib/logger.js";
 
 const BASE = "https://api.adzuna.com/v1/api/jobs/us/search/1";
@@ -19,10 +20,14 @@ export async function fetchJobs() {
       app_id: adzunaAppId,
       app_key: adzunaApiKey,
       what: query,
-      where: location,
       results_per_page: "20",
       sort_by: "date",
     });
+    // The endpoint is already scoped to the US (/jobs/us/). For a nationwide
+    // search, omit `where` entirely — passing "United States" as a place would
+    // over-restrict and return almost nothing. A specific city/region is still
+    // honored when JOB_LOCATION names one.
+    if (!isNationwide(location)) params.set("where", location);
 
     const res = await fetch(`${BASE}?${params}`, {
       headers: { "Content-Type": "application/json" },
