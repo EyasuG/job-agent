@@ -35,13 +35,18 @@ export async function sendJobNotification(job, tailored, resumePath) {
   let scoreBar = score != null ? ` — Match: ${score}/100` : "";
   if (coverage != null) scoreBar += ` — Keywords: ${coverage}%`;
 
-  let text = "";
-  if (isTop) text += `⭐ *TOP MATCH* ⭐\n`;
-  text += `*${escMd(job.title)}*\n${escMd(job.company)} — ${escMd(job.location)}${escMd(scoreBar)}`;
+  let header = "";
+  if (isTop) header += `⭐ *TOP MATCH* ⭐\n`;
+  header += `*${escMd(job.title)}*\n${escMd(job.company)} — ${escMd(job.location)}${escMd(scoreBar)}`;
 
+  let gapsBlock = "";
   if (tailored?.unmatched_requirements?.length) {
-    text += `\n\n_Gaps:_ ${tailored.unmatched_requirements.map(escMd).join(", ")}`;
+    gapsBlock = `\n\n_Gaps:_ ${tailored.unmatched_requirements.map(escMd).join(", ")}`;
   }
+
+  // Full version (header + gaps) for the plain-message path, which caps at
+  // 4096 chars — plenty of room even for a long gaps list.
+  let text = header + gapsBlock;
 
   const tok = jobToken(job.id);
   const keyboard = {
@@ -59,11 +64,14 @@ export async function sendJobNotification(job, tailored, resumePath) {
   };
 
   // If a tailored resume was rendered, attach the actual .docx so it can be
-  // downloaded straight from the chat. Telegram captions cap at 1024 chars,
-  // which the job summary above stays well within.
+  // downloaded straight from the chat. Telegram captions cap at 1024 chars;
+  // the header alone always fits, but a long gaps list can push it over, so
+  // use the capped caption here and reserve the full text (with gaps) for
+  // the plain-message fallback path below.
   if (resumePath && fs.existsSync(resumePath)) {
     try {
-      await sendDocumentNative(chatId, resumePath, friendlyFilename(job), text, keyboard);
+      const caption = fitCaption(header, gapsBlock);
+      await sendDocumentNative(chatId, resumePath, friendlyFilename(job), caption, keyboard);
       return;
     } catch (err) {
       // Fall through to a plain message with the path if the upload fails.
@@ -78,6 +86,20 @@ export async function sendJobNotification(job, tailored, resumePath) {
     reply_markup: keyboard,
     disable_web_page_preview: true,
   });
+}
+
+const TELEGRAM_CAPTION_LIMIT = 1024;
+
+/**
+ * Fits the header + gaps block within Telegram's caption cap. Slicing raw
+ * MarkdownV2 mid-string would leave unbalanced formatting markers (bold,
+ * italic, escapes) and get the whole message rejected, so instead drop the
+ * unbounded part (the gaps list) wholesale when it doesn't fit; the header
+ * alone (title/company/location/score) is always short enough on its own.
+ */
+function fitCaption(header, gapsBlock, limit = TELEGRAM_CAPTION_LIMIT) {
+  if (!gapsBlock) return header;
+  return (header + gapsBlock).length <= limit ? header + gapsBlock : header;
 }
 
 const DOCX_MIME =
