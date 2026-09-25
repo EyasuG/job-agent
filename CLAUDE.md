@@ -80,7 +80,8 @@ src/
     jsearch.js       # JSearch via RapidAPI (multi-query)
     adzuna.js        # Adzuna (multi-query)
     remotive.js      # Remotive remote jobs (free, no key; US-eligible only)
-    jooble.js        # Jooble (POST API; skips until JOOBLE_API_KEY is set)
+    ats.js           # Employer ATS feeds (Greenhouse/Lever/Ashby, no key; ATS_BOARDS list)
+    serpapi.js       # Google Jobs via SerpApi (monthly budget-capped)
   store/
     db.js            # node:sqlite store: dedup + score/resume_path/status/description
   tailor/
@@ -133,8 +134,12 @@ github.com/EyasuG/job-agent (branch `jobReady`):
 - **Pipeline**: fetch → clearance filter → dedup → Claude tailor (ATS keyword
   optimization with score + keyword_coverage) → styled .docx → Telegram notify,
   processed 3-at-a-time with p-limit. Failed tailoring is retried next run.
-- **Job sources** (4): JSearch + Adzuna (live), Remotive (live, US-eligible only),
-  Jooble (activates when JOOBLE_API_KEY is set). Multi-query via JOB_QUERIES
+- **Job sources**: JSearch + Adzuna (live), Remotive (live, US-eligible only),
+  SerpApi Google Jobs (budget-capped), and employer ATS feeds (Greenhouse, Lever,
+  Ashby public job-board APIs — full descriptions, direct employer links;
+  target companies set via ATS_BOARDS, built-in starter list of ~23). Jooble was
+  removed: its API returns truncated snippets and its links route through
+  Jooble's paid-redirect partners. Multi-query via JOB_QUERIES
   (currently "forward deployed engineer,full stack developer,front end developer";
   location nationwide via JOB_LOCATION="United States"; date window: month).
 - **Curation**: clearance-required jobs filtered out (EXCLUDE_CLEARANCE=true);
@@ -147,7 +152,7 @@ github.com/EyasuG/job-agent (branch `jobReady`):
   buttons persist status to the DB shared with the dashboard.
 - **Web dashboard** (Express + vanilla JS, port 3000): jobs table with search and
   score badges, saved-jobs view, master.json editor, status page with Run Now.
-- **Tests**: 35 passing (`npm test`, node:test) — normalization, dedup,
+- **Tests**: 78 passing (`npm test`, node:test) — normalization, dedup,
   aggregation, clearance + US-eligibility filters.
 - **Deployment**: launchd installer (deploy/install-launchd.sh) and systemd unit
   documented in deploy/DEPLOYMENT.md.
@@ -161,8 +166,8 @@ must come from the full LinkedIn archive or be entered manually.
 
 1. **Fill in master.json with real experience** — highest leverage; unblocks
    meaningful match scores and the 95%+ keyword-fit goal.
-2. **Jooble activation** — paste JOOBLE_API_KEY into .env once the key request
-   is approved (no code change needed).
+2. **Curate ATS_BOARDS** — add target companies (greenhouse/lever/ashby slugs)
+   to .env; an unknown slug just logs a warning and is skipped.
 3. **Dashboard auth** — the Express server is unauthenticated; add a simple
    token/basic-auth gate before exposing it beyond localhost.
 4. **Job detail view** — dashboard modal showing stored description,

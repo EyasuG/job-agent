@@ -15,6 +15,18 @@ function optional(name, fallback) {
   return process.env[name] ?? fallback;
 }
 
+// Starter list of tech companies with public ATS feeds (verified live).
+// Override with ATS_BOARDS in .env to target your own list.
+const DEFAULT_ATS_BOARDS = [
+  "greenhouse:stripe", "greenhouse:figma", "greenhouse:vercel", "greenhouse:discord",
+  "greenhouse:anthropic", "greenhouse:cloudflare", "greenhouse:coinbase",
+  "greenhouse:robinhood", "greenhouse:datadog", "greenhouse:airbnb",
+  "greenhouse:databricks", "greenhouse:samsara", "greenhouse:gitlab",
+  "lever:palantir", "lever:spotify",
+  "ashby:ramp", "ashby:notion", "ashby:linear", "ashby:openai", "ashby:supabase",
+  "ashby:vanta", "ashby:replit", "ashby:cursor",
+].join(",");
+
 export const config = {
   telegram: {
     token: required("TELEGRAM_BOT_TOKEN"),
@@ -24,7 +36,6 @@ export const config = {
     rapidApiKey: optional("RAPIDAPI_KEY", ""),
     adzunaAppId: optional("ADZUNA_APP_ID", ""),
     adzunaApiKey: optional("ADZUNA_APP_KEY", ""),
-    joobleApiKey: optional("JOOBLE_API_KEY", ""),
     serpApiKey: optional("SERPAPI_KEY", ""),
     // Monthly SerpApi search cap; the fetcher stops calling once hit so the
     // free tier (250/mo) is never exceeded. Set below 250 for headroom.
@@ -32,6 +43,19 @@ export const config = {
     // Minimum hours between SerpApi runs — paces the budget across the month
     // (24 = once/day). Other sources still run every scan.
     serpApiMinIntervalHours: parseInt(optional("SERPAPI_MIN_INTERVAL_HOURS", "24"), 10),
+    // Employer ATS job boards to pull directly, as "provider:slug" pairs
+    // (provider = greenhouse | lever | ashby). The slug is the company's board
+    // name, e.g. boards.greenhouse.io/<slug>, jobs.lever.co/<slug>,
+    // jobs.ashbyhq.com/<slug>. Set ATS_BOARDS= (empty) to disable.
+    atsBoards: optional("ATS_BOARDS", DEFAULT_ATS_BOARDS)
+      .split(",")
+      .map((b) => b.trim())
+      .filter(Boolean)
+      .map((b) => {
+        const [provider, slug] = b.split(":").map((s) => s.trim());
+        return { provider: provider.toLowerCase(), slug };
+      })
+      .filter((b) => b.slug),
     // Comma-separated list of search queries; each fetcher runs all of them
     queries: optional("JOB_QUERIES", "javascript developer,devops engineer")
       .split(",")
