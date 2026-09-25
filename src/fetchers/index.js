@@ -1,7 +1,7 @@
 import { fetchJobs as fetchJSearch } from "./jsearch.js";
 import { fetchJobs as fetchAdzuna } from "./adzuna.js";
 import { fetchJobs as fetchRemotive } from "./remotive.js";
-import { fetchJobs as fetchJooble } from "./jooble.js";
+import { fetchJobs as fetchAts } from "./ats.js";
 import { fetchJobs as fetchSerpApi } from "./serpapi.js";
 import { requiresClearance, isBlockedDomain, isExcludedRole } from "../lib/filters.js";
 import { config } from "../config.js";
@@ -18,7 +18,7 @@ export async function fetchAllJobs() {
     fetchJSearch(),
     fetchAdzuna(),
     fetchRemotive(),
-    fetchJooble(),
+    fetchAts(),
     fetchSerpApi(),
   ]);
 
