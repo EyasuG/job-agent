@@ -89,6 +89,60 @@ test("does NOT flag 'cleared' in description prose", () => {
   );
 });
 
+// Public Trust is a suitability check the candidate can pass — keep those jobs.
+test("does NOT flag 'Clearance Required: Ability to Obtain Public Trust'", () => {
+  assert.equal(
+    requiresClearance({ title: "Copilot Studio Solution Engineer", description: "Clearance Required: Ability to Obtain Public Trust" }),
+    false
+  );
+});
+
+test("does NOT flag 'Public Trust clearance required'", () => {
+  assert.equal(
+    requiresClearance({ title: "Front End Engineer", description: "A Public Trust clearance required for this VA contract." }),
+    false
+  );
+});
+
+test("does NOT flag 'clearance eligible' when it is for Public Trust", () => {
+  assert.equal(
+    requiresClearance({ title: "Engineer II", description: "Must be Public-Trust clearance eligible." }),
+    false
+  );
+});
+
+test("does NOT flag 'may require a background check or clearance depending on the contract'", () => {
+  assert.equal(
+    requiresClearance({ title: "Software Engineer", description: "This role may require a background check or clearance depending on the contract." }),
+    false
+  );
+});
+
+// Secret and above still disqualify, including wordings the old filter missed.
+test("flags 'minimum Secret security clearance'", () => {
+  assert.ok(requiresClearance({ title: "Dev", description: "Ability to obtain a minimum Secret security clearance." }));
+});
+
+test("flags 'Secret-level clearance'", () => {
+  assert.ok(requiresClearance({ title: "Senior SWE", description: "Must hold an active Secret-level clearance." }));
+});
+
+test("flags 'Public Trust or active Secret' (hard pattern wins)", () => {
+  assert.ok(requiresClearance({ title: "Dev", description: "Public Trust or an active Secret clearance." }));
+});
+
+test("flags generic 'security clearance required' with no Public Trust context", () => {
+  assert.ok(requiresClearance({ title: "Dev", description: "Security clearance required." }));
+});
+
+test("flags 'Clearance: Secret'", () => {
+  assert.ok(requiresClearance({ title: "Dev", description: "Clearance: Secret" }));
+});
+
+test("flags DOE Q clearance", () => {
+  assert.ok(requiresClearance({ title: "Dev", description: "Active DOE Q clearance required." }));
+});
+
 // ── Remotive US-eligibility filter ───────────────────────────────────────────
 
 import { isUsEligible } from "../src/fetchers/remotive.js";

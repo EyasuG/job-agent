@@ -93,6 +93,16 @@ export const config = {
     model: optional("LLM_MODEL", ""),
     // Model used only when provider === "anthropic"
     anthropicModel: optional("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
+    // Minimum milliseconds between calls to each provider, to stay inside
+    // free-tier rate limits (the pipeline tailors jobs 3-at-a-time, which
+    // otherwise bursts past per-minute caps and triggers 429s). Spacing is
+    // enforced per-provider in llm.js. Defaults: Gemini free ≈10 RPM,
+    // Groq free ≈24 RPM; Ollama is local so unthrottled.
+    minIntervalMs: {
+      gemini: parseInt(optional("GEMINI_MIN_INTERVAL_MS", "6000"), 10),
+      groq: parseInt(optional("GROQ_MIN_INTERVAL_MS", "2500"), 10),
+      ollama: parseInt(optional("OLLAMA_MIN_INTERVAL_MS", "0"), 10),
+    },
     // Record floor: jobs scoring below this are discarded and never stored.
     // Jobs at/above it are kept (scored + saved) so they're reviewable on the
     // dashboard, even when they don't clear the notify gate below.
