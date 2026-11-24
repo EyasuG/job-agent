@@ -265,15 +265,58 @@ export function startBot(runPipeline) {
     logger.error(`Telegraf error: ${err.message}`);
   });
 
-  // launch() uses long-polling by default — no webhook setup needed
-  bot.launch();
-  logger.info("Telegram bot started (long-polling).");
+  // Connect in the background and keep retrying if Telegram is unreachable
+  // (offline, or a network filter intercepting HTTPS). The scheduler and
+  // dashboard keep running meanwhile; alerts resume once Telegram is back.
+  launchWithRetry(bot);
 
   // Graceful shutdown
-  process.once("SIGINT", () => bot.stop("SIGINT"));
-  process.once("SIGTERM", () => bot.stop("SIGTERM"));
+  const shutdown = (reason) => {
+    stopping = true;
+    try { bot.stop(reason); } catch { /* not connected — nothing to stop */ }
+  };
+  process.once("SIGINT", () => shutdown("SIGINT"));
+  process.once("SIGTERM", () => shutdown("SIGTERM"));
 
   return bot;
+}
+
+const RETRY_BASE_MS = 30_000;
+const RETRY_MAX_MS = 15 * 60_000;
+let stopping = false;
+
+/**
+ * Starts long-polling and restarts it whenever it fails. launch() only
+ * settles when polling ends: it rejects if Telegram can't be reached at
+ * startup or if polling dies later, so either case loops back here with
+ * exponential backoff (30s → 15min).
+ */
+async function launchWithRetry(bot) {
+  let delay = RETRY_BASE_MS;
+  while (!stopping) {
+    try {
+      logger.info("Connecting to Telegram (long-polling)…");
+      // The callback fires once Telegram answers getMe, i.e. we're connected
+      await bot.launch({}, () => {
+        delay = RETRY_BASE_MS;
+        logger.info("Telegram bot connected.");
+      });
+      return; // polling stopped on purpose (shutdown)
+    } catch (err) {
+      if (stopping) return;
+      logger.warn(
+        `Telegram unreachable (${describeError(err)}); retrying in ${Math.round(delay / 1000)}s. ` +
+          "Scans and the dashboard keep running."
+      );
+      await new Promise((r) => setTimeout(r, delay));
+      delay = Math.min(delay * 2, RETRY_MAX_MS);
+    }
+  }
+}
+
+/** Short error description: the error code when there is one, else the message. */
+function describeError(err) {
+  return String(err?.code ?? err?.cause?.code ?? err?.message ?? err);
 }
 
 /** Escape special MarkdownV2 characters. */

@@ -23,6 +23,10 @@ tabLinks.forEach((link) => {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+
 function scoreHtml(score) {
   if (score == null) return `<span class="score-none">—</span>`;
   const cls = score >= 70 ? "score-high" : score >= 40 ? "score-mid" : "score-low";
@@ -61,13 +65,14 @@ async function loadJobs() {
 function renderJobs(jobs) {
   const tbody = document.getElementById("jobs-body");
   if (!jobs.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="muted">No jobs yet — run a scan first.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="muted">No jobs yet — run a scan first.</td></tr>`;
     return;
   }
   tbody.innerHTML = jobs.map((j) => `
     <tr>
       <td><a href="${j.url}" target="_blank" rel="noopener">${j.title}</a></td>
       <td>${j.company}</td>
+      <td>${j.location ? escapeHtml(j.location) : `<span class="muted">—</span>`}</td>
       <td>${scoreHtml(j.score)}</td>
       <td>${fmtDate(j.seen_at)}</td>
       <td>${statusBadge(j.status)}</td>
@@ -91,7 +96,9 @@ function renderJobs(jobs) {
 document.getElementById("jobs-search").addEventListener("input", (e) => {
   const q = e.target.value.toLowerCase();
   renderJobs(allJobs.filter((j) =>
-    j.title?.toLowerCase().includes(q) || j.company?.toLowerCase().includes(q)
+    j.title?.toLowerCase().includes(q) ||
+    j.company?.toLowerCase().includes(q) ||
+    j.location?.toLowerCase().includes(q)
   ));
 });
 

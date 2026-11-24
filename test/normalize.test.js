@@ -151,3 +151,11 @@ test("SerpApi: id is prefixed to prevent dedup collisions", () => {
   const job = normalizeSerpApi({ job_id: "42" });
   assert.match(job.id, /^serpapi:/);
 });
+
+// The real JSearch normalizer: remote postings without a city get a "Remote" label
+test("JSearch (real normalizer): labels remote postings", async () => {
+  process.env.TELEGRAM_BOT_TOKEN ??= "test"; process.env.TELEGRAM_CHAT_ID ??= "test";
+  const { normalize } = await import("../src/fetchers/jsearch.js");
+  assert.equal(normalize({ job_id: "1", job_is_remote: true }).location, "Remote");
+  assert.equal(normalize({ job_id: "2", job_city: "Reston", job_state: "VA" }).location, "Reston, VA");
+});
