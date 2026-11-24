@@ -1,10 +1,10 @@
 import pLimit from "p-limit";
 import { config } from "../config.js";
 import { logger } from "../lib/logger.js";
-import { isNationwide } from "../lib/filters.js";
+import { isNationwide, isInRegion } from "../lib/filters.js";
 
 // Pulls jobs straight from employers' applicant-tracking systems (ATS).
-// Greenhouse, Lever and Ashby each publish a free, unauthenticated JSON feed
+// Greenhouse, Lever, Ashby and SmartRecruiters each publish a free, unauthenticated JSON feed
 // of a company's open roles — the same data that powers the company's own
 // careers page. Compared with aggregators this gives us:
 //   - full job descriptions (better tailoring than truncated snippets)
@@ -31,14 +31,25 @@ const PROVIDERS = {
     list: (data) => data.jobs ?? [],
     normalize: normalizeAshby,
   },
+  // SmartRecruiters' list endpoint has no descriptions and boards can hold
+  // thousands of global roles, so it gets a custom fetch: page through US
+  // postings, keep titles matching JOB_QUERIES, then fetch details for those.
+  smartrecruiters: {
+    fetchBoard: fetchSmartRecruitersBoard,
+  },
 };
+
+const SR_API = "https://api.smartrecruiters.com/v1/companies";
+const SR_PAGE_SIZE = 100;
+const SR_MAX_PAGES = 10; // caps a huge board (e.g. 5k-role enterprises) at 1,000 roles
 
 // Boards are fetched a few at a time; some feeds are several MB.
 const limit = pLimit(5);
 
 /** Fetches every configured ATS board and returns normalized, filtered jobs. */
 export async function fetchJobs() {
-  const { atsBoards, queries, location, datePosted } = config.jobApi;
+  const { atsBoards, queries, location, datePosted, regionStates, regionIncludeRemote } =
+    config.jobApi;
 
   if (!atsBoards.length) {
     logger.warn("ATS_BOARDS is empty — skipping employer ATS feeds.");
@@ -50,6 +61,12 @@ export async function fetchJobs() {
     atsBoards.map((board) => limit(() => fetchBoard(board)))
   );
 
+  // Every board failing means the network is down/filtered, not that no one
+  // is hiring — report it so the scan counts as failed and is retried soon.
+  if (results.every((r) => r.status === "rejected")) {
+    throw new Error(`all ${atsBoards.length} ATS boards failed (${results[0].reason?.message})`);
+  }
+
   const jobs = [];
   results.forEach((result, i) => {
     // One bad slug (renamed company, moved ATS) shouldn't sink the others
@@ -59,8 +76,16 @@ export async function fetchJobs() {
     }
     for (const job of result.value) {
       if (!matchesQueries(job.title, queries)) continue;
-      if (!matchesLocation(job, location)) continue;
+      if (!matchesLocation(job, regionStates.length ? "United States" : location)) continue;
       if (since && job.postedAt && job.postedAt < since) continue;
+      if (regionStates.length) {
+        const opts = { includeRemote: regionIncludeRemote };
+        // Multi-office postings: check every listed office, and surface the
+        // full list when the primary office is outside the region so the
+        // aggregator's region filter (which reads `location`) keeps it too.
+        if (!isInRegion(job.locationText ?? job.location, regionStates, opts)) continue;
+        if (!isInRegion(job.location, regionStates, opts)) job.location = job.locationText;
+      }
       jobs.push(stripInternal(job));
     }
   });
@@ -72,12 +97,48 @@ export async function fetchJobs() {
 async function fetchBoard({ provider, slug }) {
   const p = PROVIDERS[provider];
   if (!p) throw new Error(`unknown ATS provider "${provider}"`);
+  if (p.fetchBoard) return p.fetchBoard(slug);
 
   const res = await fetch(p.url(slug));
   if (!res.ok) throw new Error(`request failed (${res.status})`);
 
   const data = await res.json();
   return p.list(data).map((j) => p.normalize(j, slug));
+}
+
+/**
+ * SmartRecruiters: list US postings page by page, pre-filter by title so we
+ * only fetch details (one request each) for roles we might actually keep.
+ */
+async function fetchSmartRecruitersBoard(slug) {
+  const { queries } = config.jobApi;
+  const base = `${SR_API}/${encodeURIComponent(slug)}/postings`;
+
+  const summaries = [];
+  for (let page = 0; page < SR_MAX_PAGES; page++) {
+    const res = await fetch(`${base}?country=us&limit=${SR_PAGE_SIZE}&offset=${page * SR_PAGE_SIZE}`);
+    if (!res.ok) throw new Error(`request failed (${res.status})`);
+    const data = await res.json();
+    const content = data.content ?? [];
+    summaries.push(...content);
+    if (content.length < SR_PAGE_SIZE || summaries.length >= (data.totalFound ?? 0)) break;
+  }
+  // An unknown slug returns 200 with zero results rather than a 404
+  if (!summaries.length) logger.warn(`ATS board smartrecruiters:${slug} returned no US postings.`);
+
+  const wanted = summaries.filter((s) => matchesQueries(s.name, queries));
+  const detailLimit = pLimit(5);
+  const details = await Promise.allSettled(
+    wanted.map((s) =>
+      detailLimit(async () => {
+        const res = await fetch(`${base}/${s.id}`);
+        if (!res.ok) throw new Error(`detail ${s.id} failed (${res.status})`);
+        return res.json();
+      })
+    )
+  );
+  // Fall back to the summary (no description) if a detail request fails
+  return details.map((d, i) => normalizeSmartRecruiters(d.status === "fulfilled" ? d.value : wanted[i], slug));
 }
 
 // ── Normalizers ──────────────────────────────────────────────────────────────
@@ -132,6 +193,29 @@ export function normalizeAshby(j, slug) {
     postedAt: parseDate(j.publishedAt),
     usHint: country ? US_TEXT.test(country) : undefined,
     locationText: [j.location, country, ...secondary].filter(Boolean).join(" | "),
+  };
+}
+
+export function normalizeSmartRecruiters(j, slug) {
+  const loc = j.location ?? {};
+  const place = [loc.city, loc.region].filter(Boolean).join(", ");
+  const workplace = loc.remote ? "Remote" : loc.hybrid ? "Hybrid" : "";
+  const sections = j.jobAd?.sections ?? {};
+  const description = ["jobDescription", "qualifications", "additionalInformation"]
+    .map((k) => sections[k]?.text)
+    .filter(Boolean)
+    .map(htmlToText)
+    .join("\n");
+  return {
+    id: `smartrecruiters:${slug}:${j.id}`,
+    title: j.name ?? "",
+    company: j.company?.name || prettifySlug(slug),
+    location: [place, workplace].filter(Boolean).join(" · "),
+    url: j.postingUrl || `https://jobs.smartrecruiters.com/${slug}/${j.id}`,
+    description,
+    postedAt: parseDate(j.releasedDate),
+    usHint: loc.country ? loc.country.toLowerCase() === "us" : undefined,
+    locationText: [loc.fullLocation, place, workplace].filter(Boolean).join(" | "),
   };
 }
 
@@ -232,7 +316,10 @@ function prettifySlug(slug) {
 const ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", "#39": "'", nbsp: " " };
 
 export function decodeEntities(s) {
-  return s.replace(/&(amp|lt|gt|quot|apos|#39|nbsp);/g, (_, e) => ENTITIES[e]);
+  return s
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+    .replace(/&(amp|lt|gt|quot|apos|nbsp);/g, (_, e) => ENTITIES[e]);
 }
 
 /** Strips tags (keeping block breaks as newlines) and collapses whitespace. */

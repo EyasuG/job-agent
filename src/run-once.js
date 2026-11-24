@@ -12,6 +12,10 @@ runOnce()
     process.exit(1);
   })
   .finally(() => {
-    getBot().stop("run-once complete");
+    try {
+      getBot().stop("run-once complete");
+    } catch {
+      /* Telegram never connected — nothing to stop */
+    }
     process.exit(0);
   });

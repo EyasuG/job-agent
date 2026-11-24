@@ -8,6 +8,8 @@ import {
   normalizeGreenhouse,
   normalizeLever,
   normalizeAshby,
+  normalizeSmartRecruiters,
+  decodeEntities,
   matchesQueries,
   matchesLocation,
   postedSince,
@@ -133,4 +135,51 @@ test("postedSince: maps JOB_DATE_POSTED to a cutoff date", () => {
   assert.equal(postedSince("month", now).toISOString(), "2026-08-26T00:00:00.000Z");
   assert.equal(postedSince("week", now).toISOString(), "2026-09-18T00:00:00.000Z");
   assert.equal(postedSince("all", now), null);
+});
+
+// ── SmartRecruiters ──────────────────────────────────────────────────────────
+
+test("SmartRecruiters: normalizes a posting detail with sections and US location", () => {
+  const job = normalizeSmartRecruiters(
+    {
+      id: "744000163223591",
+      name: "Full Stack Engineer",
+      company: { identifier: "ServiceNow", name: "ServiceNow" },
+      releasedDate: "2026-11-01T13:35:02.354Z",
+      location: { city: "Santa Clara", region: "CA", country: "us", hybrid: true, fullLocation: "Santa Clara, CA, United States" },
+      postingUrl: "https://jobs.smartrecruiters.com/ServiceNow/744000163223591-full-stack-engineer",
+      jobAd: {
+        sections: {
+          companyDescription: { text: "<p>About us</p>" },
+          jobDescription: { text: "<p>Build &amp; ship React</p>" },
+          qualifications: { text: "<ul><li>3+ years&#xa0;JS</li></ul>" },
+        },
+      },
+    },
+    "ServiceNow"
+  );
+  assert.equal(job.id, "smartrecruiters:ServiceNow:744000163223591");
+  assert.equal(job.company, "ServiceNow");
+  assert.equal(job.location, "Santa Clara, CA · Hybrid");
+  assert.equal(job.url, "https://jobs.smartrecruiters.com/ServiceNow/744000163223591-full-stack-engineer");
+  // Company boilerplate is skipped; role sections are kept
+  assert.equal(job.description, "Build & ship React\n3+ years\u00a0JS");
+  assert.equal(job.usHint, true);
+  assert.ok(matchesLocation(job));
+});
+
+test("SmartRecruiters: falls back to a summary (no detail) without throwing", () => {
+  const job = normalizeSmartRecruiters(
+    { id: "1", name: "Front End Developer", location: { country: "de", remote: true, fullLocation: "Berlin, Germany" } },
+    "AcmeCo"
+  );
+  assert.equal(job.url, "https://jobs.smartrecruiters.com/AcmeCo/1");
+  assert.equal(job.description, "");
+  assert.equal(job.company, "AcmeCo");
+  // Structured non-US country is dropped even though it's remote
+  assert.equal(matchesLocation(job), false);
+});
+
+test("decodeEntities: handles hex and decimal numeric entities", () => {
+  assert.equal(decodeEntities("a&#xa0;b&#39;c&#8217;d"), "a\u00a0b'c\u2019d");
 });

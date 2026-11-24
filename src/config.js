@@ -44,9 +44,10 @@ export const config = {
     // (24 = once/day). Other sources still run every scan.
     serpApiMinIntervalHours: parseInt(optional("SERPAPI_MIN_INTERVAL_HOURS", "24"), 10),
     // Employer ATS job boards to pull directly, as "provider:slug" pairs
-    // (provider = greenhouse | lever | ashby). The slug is the company's board
+    // (provider = greenhouse | lever | ashby | smartrecruiters). The slug is the company's board
     // name, e.g. boards.greenhouse.io/<slug>, jobs.lever.co/<slug>,
-    // jobs.ashbyhq.com/<slug>. Set ATS_BOARDS= (empty) to disable.
+    // jobs.ashbyhq.com/<slug>,
+    // jobs.smartrecruiters.com/<slug> (case-sensitive, e.g. ServiceNow). Set ATS_BOARDS= (empty) to disable.
     atsBoards: optional("ATS_BOARDS", DEFAULT_ATS_BOARDS)
       .split(",")
       .map((b) => b.trim())
@@ -65,7 +66,17 @@ export const config = {
     // country — onsite, hybrid, and remote. Name a city/region to narrow it.
     location: optional("JOB_LOCATION", "United States"),
     datePosted: optional("JOB_DATE_POSTED", "month"),
-    // Skip jobs that require a security clearance
+    // Region limit: comma-separated US state codes a job must be located in
+    // (e.g. the East Coast + DC). Applied to every source after fetching.
+    // Empty = no limit (anywhere in the US).
+    regionStates: optional("JOB_REGION_STATES", "")
+      .split(",")
+      .map((s) => s.trim().toUpperCase())
+      .filter(Boolean),
+    // Keep remote roles that list no in-region location ("Remote - US")?
+    // Off by default: a region limit means jobs based in that region only.
+    regionIncludeRemote: optional("REGION_INCLUDE_REMOTE", "false") === "true",
+    // Skip jobs mentioning any form of clearance (incl. Public Trust)
     excludeClearance: optional("EXCLUDE_CLEARANCE", "true") === "true",
     // Comma-separated apply-URL domains to drop (low-trust aggregators)
     blockedDomains: optional("BLOCKED_DOMAINS", "lensa.com,jobleads.com,recruit.net")
@@ -93,6 +104,16 @@ export const config = {
     model: optional("LLM_MODEL", ""),
     // Model used only when provider === "anthropic"
     anthropicModel: optional("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
+    // Minimum milliseconds between calls to each provider, to stay inside
+    // free-tier rate limits (the pipeline tailors jobs 3-at-a-time, which
+    // otherwise bursts past per-minute caps and triggers 429s). Spacing is
+    // enforced per-provider in llm.js. Defaults: Gemini free ≈10 RPM,
+    // Groq free ≈24 RPM; Ollama is local so unthrottled.
+    minIntervalMs: {
+      gemini: parseInt(optional("GEMINI_MIN_INTERVAL_MS", "6000"), 10),
+      groq: parseInt(optional("GROQ_MIN_INTERVAL_MS", "2500"), 10),
+      ollama: parseInt(optional("OLLAMA_MIN_INTERVAL_MS", "0"), 10),
+    },
     // Record floor: jobs scoring below this are discarded and never stored.
     // Jobs at/above it are kept (scored + saved) so they're reviewable on the
     // dashboard, even when they don't clear the notify gate below.
@@ -114,6 +135,9 @@ export const config = {
   // Jobs scoring at/above this get a ⭐ TOP MATCH priority alert
   topMatchScore: parseInt(optional("TOP_MATCH_SCORE", "85"), 10),
   schedule: optional("CRON_SCHEDULE", "0 */4 * * *"),
+  // Scan every N hours on a true fixed interval (overrides CRON_SCHEDULE and
+  // RUN_ON_START). 0/unset = use CRON_SCHEDULE.
+  scanIntervalHours: parseFloat(optional("SCAN_INTERVAL_HOURS", "0")) || 0,
   // Run a catch-up scan shortly after startup (covers ticks missed while
   // the process was down or the machine was asleep)
   runOnStart: optional("RUN_ON_START", "true") === "true",

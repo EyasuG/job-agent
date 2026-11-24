@@ -13,8 +13,8 @@ A personal, single-user **AI job-search agent** that runs on a schedule and:
 4. **Renders** the tailored resume to a `.docx` file.
 5. **Notifies** the user on Telegram with the job, a link, and the resume path.
 
-The user is a JavaScript / full-stack engineer targeting software roles nationwide
-(onsite, hybrid, and remote across the US). This is a learning project as much as a tool —
+The user is a JavaScript / full-stack engineer targeting software roles in the DMV and East Coast
+(onsite and hybrid) plus US remote roles, non-clearance only. This is a learning project as much as a tool —
 prefer clear, well-commented, idiomatic code over clever abstractions.
 
 ## 2. Hard constraints (do not violate)
@@ -71,19 +71,20 @@ src/
   config.js          # env loading + validation + path resolution (single source of truth)
   index.js           # entry: starts bot + scheduler + web dashboard (npm start)
   run-once.js        # entry: runs a single pipeline pass (npm run once)
-  scheduler.js       # node-cron wrapper around the pipeline
+  prune.js           # entry: drop stored jobs failing current filters (npm run prune [-- --apply])
+  scheduler.js       # SCAN_INTERVAL_HOURS fixed interval (persisted) or node-cron fallback
   pipeline.js        # orchestrates fetch -> dedup -> tailor -> render -> notify (p-limit concurrency)
   bot/
     bot.js           # Telegraf bot: /start /status /run + inline Save/Skip buttons
   fetchers/
-    index.js         # aggregator: runs all sources, merges, dedups, clearance-filters
+    index.js         # aggregator: runs all sources, merges, dedups, region + clearance filters
     jsearch.js       # JSearch via RapidAPI (multi-query)
     adzuna.js        # Adzuna (multi-query)
     remotive.js      # Remotive remote jobs (free, no key; US-eligible only)
-    ats.js           # Employer ATS feeds (Greenhouse/Lever/Ashby, no key; ATS_BOARDS list)
+    ats.js           # Employer ATS feeds (Greenhouse/Lever/Ashby/SmartRecruiters, no key; ATS_BOARDS list)
     serpapi.js       # Google Jobs via SerpApi (monthly budget-capped)
   store/
-    db.js            # node:sqlite store: dedup + score/resume_path/status/description
+    db.js            # node:sqlite store: dedup + score/resume_path/status/description/location
   tailor/
     tailor.js        # Claude ATS keyword optimizer; returns score, keyword_coverage, bullets, gaps
     render.js        # styled .docx: header, summary, experience, skills, education
@@ -94,7 +95,7 @@ src/
     api/             # jobs.js, resume.js, agent.js route modules
   lib/
     logger.js        # timestamped logger
-    filters.js       # requiresClearance() — security-clearance job filter
+    filters.js       # requiresClearance() (any clearance incl. Public Trust), isInRegion() (state-code region)
 public/              # dashboard frontend (vanilla JS + Pico CSS)
 test/                # node:test suites (npm test)
 deploy/              # launchd plist + installer, systemd unit, DEPLOYMENT.md
@@ -136,13 +137,18 @@ github.com/EyasuG/job-agent (branch `jobReady`):
   processed 3-at-a-time with p-limit. Failed tailoring is retried next run.
 - **Job sources**: JSearch + Adzuna (live), Remotive (live, US-eligible only),
   SerpApi Google Jobs (budget-capped), and employer ATS feeds (Greenhouse, Lever,
-  Ashby public job-board APIs — full descriptions, direct employer links;
+  Ashby, SmartRecruiters public job-board APIs — full descriptions, direct employer links;
   target companies set via ATS_BOARDS, built-in starter list of ~23). Jooble was
   removed: its API returns truncated snippets and its links route through
   Jooble's paid-redirect partners. Multi-query via JOB_QUERIES
   (currently "forward deployed engineer,full stack developer,front end developer";
-  location nationwide via JOB_LOCATION="United States"; date window: month).
-- **Curation**: clearance-required jobs filtered out (EXCLUDE_CLEARANCE=true);
+  search anchor JOB_LOCATION="Washington, DC"; region limit JOB_REGION_STATES =
+  DMV + East Coast states, REGION_INCLUDE_REMOTE=true (US remote kept; JSearch also runs
+  remote-only queries); date window: month).
+- **Curation**: jobs outside JOB_REGION_STATES dropped (all sources; ATS checks every
+  listed office); jobs mentioning ANY clearance — Secret+, polygraph, Public Trust,
+  suitability/background-investigation tiers, "may require a clearance" — filtered
+  out (EXCLUDE_CLEARANCE=true);
   DevOps/SRE/platform/infra titles dropped via EXCLUDED_ROLES; jobs below
   MIN_MATCH_SCORE (the record floor) are discarded and marked seen. A separate
   NOTIFY_MATCH_SCORE gates Telegram alerts: jobs in the band
@@ -152,8 +158,8 @@ github.com/EyasuG/job-agent (branch `jobReady`):
   buttons persist status to the DB shared with the dashboard.
 - **Web dashboard** (Express + vanilla JS, port 3000): jobs table with search and
   score badges, saved-jobs view, master.json editor, status page with Run Now.
-- **Tests**: 78 passing (`npm test`, node:test) — normalization, dedup,
-  aggregation, clearance + US-eligibility filters.
+- **Tests**: 106 passing (`npm test`, node:test) — normalization, dedup,
+  aggregation, clearance, region + US-eligibility filters.
 - **Deployment**: launchd installer (deploy/install-launchd.sh) and systemd unit
   documented in deploy/DEPLOYMENT.md.
 
@@ -166,7 +172,8 @@ must come from the full LinkedIn archive or be entered manually.
 
 1. **Fill in master.json with real experience** — highest leverage; unblocks
    meaningful match scores and the 95%+ keyword-fit goal.
-2. **Curate ATS_BOARDS** — add target companies (greenhouse/lever/ashby slugs)
+2. **Curate ATS_BOARDS** — add target companies (greenhouse/lever/ashby/smartrecruiters slugs;
+   SmartRecruiters slugs are case-sensitive, e.g. `smartrecruiters:ServiceNow`)
    to .env; an unknown slug just logs a warning and is skipped.
 3. **Dashboard auth** — the Express server is unauthenticated; add a simple
    token/basic-auth gate before exposing it beyond localhost.
@@ -181,6 +188,10 @@ must come from the full LinkedIn archive or be entered manually.
 ## 9. How to work in this repo
 
 - Test a single pass with `npm run once` before touching the scheduler.
+- After changing filters (region, clearance, roles, domains), run `npm run prune` (dry run)
+  then `npm run prune -- --apply` to clean stored jobs. It backs up the DB, moves resumes
+  to `output/_removed-<date>/`, and never removes saved jobs. Rows stored before
+  2026-11-24 have no location, so region is only judged on newer rows.
 - When changing the job source, only edit the relevant `fetchers/*` module and keep the
   normalized shape intact.
 - Update this file's "Current status" and "Roadmap" sections as you complete tasks.

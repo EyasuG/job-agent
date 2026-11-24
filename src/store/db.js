@@ -20,7 +20,8 @@ db.exec(`
     resume_path TEXT,
     status      TEXT DEFAULT 'new',
     description TEXT,
-    token       TEXT
+    token       TEXT,
+    location    TEXT
   );
 `);
 
@@ -31,6 +32,8 @@ for (const col of [
   "ALTER TABLE seen_jobs ADD COLUMN status      TEXT DEFAULT 'new'",
   "ALTER TABLE seen_jobs ADD COLUMN description TEXT",
   "ALTER TABLE seen_jobs ADD COLUMN token       TEXT",
+  // Rows stored before this column existed have NULL location
+  "ALTER TABLE seen_jobs ADD COLUMN location    TEXT",
 ]) {
   try { db.exec(col); } catch { /* column already exists — ignore */ }
 }
@@ -40,7 +43,7 @@ try { db.exec("CREATE INDEX IF NOT EXISTS idx_token ON seen_jobs(token)"); } cat
 
 const stmtSelect   = db.prepare("SELECT 1 FROM seen_jobs WHERE id = ?");
 const stmtInsert   = db.prepare(
-  "INSERT OR IGNORE INTO seen_jobs (id, title, company, url, token) VALUES (?, ?, ?, ?, ?)"
+  "INSERT OR IGNORE INTO seen_jobs (id, title, company, url, token, location) VALUES (?, ?, ?, ?, ?, ?)"
 );
 const stmtUpdate   = db.prepare(
   "UPDATE seen_jobs SET score = ?, resume_path = ?, description = ? WHERE id = ?"
@@ -54,6 +57,7 @@ const stmtAll      = db.prepare(
 const stmtFilter   = db.prepare(
   "SELECT * FROM seen_jobs WHERE status = ? ORDER BY seen_at DESC"
 );
+const stmtDelete   = db.prepare("DELETE FROM seen_jobs WHERE id = ?");
 const stmtOne      = db.prepare("SELECT * FROM seen_jobs WHERE id = ?");
 const stmtByToken  = db.prepare("SELECT * FROM seen_jobs WHERE token = ?");
 const stmtTop      = db.prepare(
@@ -74,7 +78,7 @@ export function isNew(jobId) {
 
 /** Inserts the job into the seen table (no-op if already there). */
 export function markSeen(job) {
-  stmtInsert.run(job.id, job.title, job.company, job.url, jobToken(job.id));
+  stmtInsert.run(job.id, job.title, job.company, job.url, jobToken(job.id), job.location || null);
 }
 
 /** Stores the score, resume path, and description after tailoring. */
@@ -90,6 +94,11 @@ export function updateJobStatus(id, status) {
 /** Returns all jobs, optionally filtered by status. */
 export function getAllJobs(status) {
   return status ? stmtFilter.all(status) : stmtAll.all();
+}
+
+/** Removes a job row entirely (used by `npm run prune`). Returns true if a row was deleted. */
+export function deleteJob(id) {
+  return stmtDelete.run(id).changes > 0;
 }
 
 /** Returns a single job row by id. */

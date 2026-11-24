@@ -13,7 +13,9 @@ const PROVIDERS = {
   },
   groq: {
     baseURL: "https://api.groq.com/openai/v1",
-    model: "llama-3.3-70b-versatile",
+    // llama-3.3-70b-versatile was decommissioned by Groq (404). gpt-oss-120b
+    // is Groq's current flagship free-tier open model (131k ctx, JSON mode).
+    model: "openai/gpt-oss-120b",
     envKey: "GROQ_API_KEY",
   },
   ollama: {
@@ -67,15 +69,34 @@ export function llmConfigured() {
   return providerChain().some(usable);
 }
 
-/** Human-readable chain for logging, e.g. "groq/llama-3.3-70b → ollama/qwen2.5:7b". */
+/** Human-readable chain for logging, e.g. "groq/gpt-oss-120b → ollama/llama3.2:3b". */
 export function llmLabel() {
   const usableChain = providerChain().filter(usable);
   if (!usableChain.length) return "none";
   return usableChain.map((p) => `${p}/${resolveModel(p)}`).join(" → ");
 }
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Per-provider rate limiter. Each provider has a "next allowed start" time;
+// concurrent callers (the pipeline runs 3-at-a-time) reserve successive slots
+// spaced by the provider's minIntervalMs, so free-tier per-minute caps aren't
+// exceeded even under concurrency. A failed call still consumes its slot, which
+// conveniently paces retries after a 429 too.
+const nextAllowed = {};
+async function rateGate(provider) {
+  const interval = config.llm.minIntervalMs?.[provider] ?? 0;
+  if (interval <= 0) return;
+  const now = Date.now();
+  const start = Math.max(now, nextAllowed[provider] ?? 0);
+  nextAllowed[provider] = start + interval;
+  const wait = start - now;
+  if (wait > 0) await sleep(wait);
+}
+
 /** Single-provider call. Returns the raw assistant text or throws. */
 async function callProvider(provider, { systemStable, systemCacheable, user, maxTokens }) {
+  await rateGate(provider);
   if (provider === "anthropic") {
     const client = new Anthropic({ apiKey: keyFor(provider) });
     const message = await client.messages.create({
@@ -105,9 +126,11 @@ async function callProvider(provider, { systemStable, systemCacheable, user, max
         { role: "user", content: user },
       ],
       response_format: { type: "json_object" },
-      // Gemini 2.5 models "think" by default, consuming the output-token
-      // budget and truncating the JSON. Disable it so all tokens go to output.
+      // Reasoning models "think" by default, consuming the output-token budget
+      // and truncating the JSON. Gemini 2.5 supports disabling it outright;
+      // Groq's gpt-oss accepts low/medium/high, so cap it at "low".
       ...(provider === "gemini" ? { reasoning_effort: "none" } : {}),
+      ...(provider === "groq" ? { reasoning_effort: "low" } : {}),
     }),
   });
 

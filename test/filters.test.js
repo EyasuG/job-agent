@@ -3,7 +3,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { requiresClearance, isBlockedDomain, isExcludedRole, isNationwide } from "../src/lib/filters.js";
+import { requiresClearance, isBlockedDomain, isExcludedRole, isNationwide, isInRegion, filterReason } from "../src/lib/filters.js";
 
 test("flags 'Top Secret' in title", () => {
   assert.ok(requiresClearance({ title: "Senior Software Developer (Top Secret Cleared)", description: "" }));
@@ -87,6 +87,88 @@ test("does NOT flag 'cleared' in description prose", () => {
     requiresClearance({ title: "Backend Developer", description: "Once the backlog is cleared, the team focuses on new features." }),
     false
   );
+});
+
+// Clearance in ANY form disqualifies — including Public Trust and
+// "may require a clearance" hedges.
+test("flags 'Clearance Required: Ability to Obtain Public Trust'", () => {
+  assert.ok(requiresClearance({ title: "Copilot Studio Solution Engineer", description: "Clearance Required: Ability to Obtain Public Trust" }));
+});
+
+test("flags 'Public Trust clearance required'", () => {
+  assert.ok(requiresClearance({ title: "Front End Engineer", description: "A Public Trust clearance required for this VA contract." }));
+});
+
+test("flags bare 'Public Trust' with no word 'clearance'", () => {
+  assert.ok(requiresClearance({ title: "Engineer II", description: "Candidates must be able to obtain a Public Trust." }));
+});
+
+test("does NOT flag 'the public trust' in marketing copy", () => {
+  assert.equal(
+    requiresClearance({ title: "Sr Software Engineer - Full Stack", description: "Helping governments operate efficiently and strengthen the public trust." }),
+    false
+  );
+});
+
+test("flags 'Moderate Risk Public Trust' and 'Public Trust position'", () => {
+  assert.ok(requiresClearance({ title: "Dev", description: "Requires a Moderate Risk Public Trust." }));
+  assert.ok(requiresClearance({ title: "Dev", description: "This is a Public Trust position." }));
+});
+
+test("flags 'may require a background check or clearance depending on the contract'", () => {
+  assert.ok(requiresClearance({ title: "Software Engineer", description: "This role may require a background check or clearance depending on the contract." }));
+});
+
+test("flags 'ability to obtain a security clearance'", () => {
+  assert.ok(requiresClearance({ title: "Full Stack Developer", description: "U.S. citizen with the ability to obtain a security clearance." }));
+});
+
+test("flags 'clearance eligible' and 'Interim Secret'", () => {
+  assert.ok(requiresClearance({ title: "Dev", description: "Must be clearance eligible." }));
+  assert.ok(requiresClearance({ title: "Dev", description: "Interim Secret acceptable to start." }));
+});
+
+test("flags background-investigation tiers and suitability checks", () => {
+  assert.ok(requiresClearance({ title: "Dev", description: "Must pass a Tier 2 background investigation." }));
+  assert.ok(requiresClearance({ title: "Dev", description: "Subject to a CBP suitability determination." }));
+});
+
+test("does NOT flag a plain background check or 'secrets management'", () => {
+  assert.equal(
+    requiresClearance({ title: "Backend Engineer", description: "Offer contingent on a background check. Experience with secrets management (Vault)." }),
+    false
+  );
+});
+
+test("does NOT flag 'medical clearance' or 'clearance sale'", () => {
+  assert.equal(
+    requiresClearance({ title: "Frontend Dev", description: "Built the clearance sale page; integrated medical clearance forms." }),
+    false
+  );
+});
+
+test("flags 'minimum Secret security clearance'", () => {
+  assert.ok(requiresClearance({ title: "Dev", description: "Ability to obtain a minimum Secret security clearance." }));
+});
+
+test("flags 'Secret-level clearance'", () => {
+  assert.ok(requiresClearance({ title: "Senior SWE", description: "Must hold an active Secret-level clearance." }));
+});
+
+test("flags 'Public Trust or active Secret'", () => {
+  assert.ok(requiresClearance({ title: "Dev", description: "Public Trust or an active Secret clearance." }));
+});
+
+test("flags generic 'security clearance required' with no Public Trust context", () => {
+  assert.ok(requiresClearance({ title: "Dev", description: "Security clearance required." }));
+});
+
+test("flags 'Clearance: Secret'", () => {
+  assert.ok(requiresClearance({ title: "Dev", description: "Clearance: Secret" }));
+});
+
+test("flags DOE Q clearance", () => {
+  assert.ok(requiresClearance({ title: "Dev", description: "Active DOE Q clearance required." }));
 });
 
 // ── Remotive US-eligibility filter ───────────────────────────────────────────
@@ -190,4 +272,70 @@ test("treats a specific city/region as NOT nationwide", () => {
   for (const v of ["Washington, DC", "New York", "Austin, TX", ""]) {
     assert.equal(isNationwide(v), false, `expected not nationwide: ${v}`);
   }
+});
+
+// ── Region (East Coast + DMV) ────────────────────────────────────────────────
+
+const EAST = "DC,MD,VA,DE,PA,NJ,NY,CT,RI,MA,VT,NH,ME,NC,SC,GA,FL".split(",");
+
+test("isInRegion: keeps DMV and East Coast locations", () => {
+  for (const loc of [
+    "Washington, DC", "Arlington, VA", "Reston, VA 20190", "Bethesda, MD",
+    "Fairfax County, Virginia", "New York, NY", "Hybrid - New York", "Boston",
+    "Atlanta, GA, US", "Remote · New York, NY", "Raleigh, North Carolina",
+  ]) assert.ok(isInRegion(loc, EAST), loc);
+});
+
+test("isInRegion: drops West/Central, West Virginia, abroad, and bare Washington", () => {
+  for (const loc of [
+    "Seattle, WA", "San Francisco, CA", "Austin, TX | Remote", "Arlington, TX",
+    "Charleston, West Virginia", "Washington", "Dublin, Ireland", "",
+  ]) assert.equal(isInRegion(loc, EAST), false, loc);
+});
+
+test("isInRegion: lowercase words are not mistaken for state codes", () => {
+  assert.equal(isInRegion("work from home, me included", ["ME"]), false);
+});
+
+test("isInRegion: unanchored remote is dropped unless includeRemote", () => {
+  assert.equal(isInRegion("Remote - US", EAST), false);
+  assert.ok(isInRegion("Remote - US", EAST, { includeRemote: true }));
+  assert.ok(isInRegion("Remote", EAST, { includeRemote: true }));
+  assert.ok(isInRegion("Austin, TX | Remote", EAST, { includeRemote: true }));
+});
+
+test("isInRegion: remote limited to another country is still dropped", () => {
+  assert.equal(isInRegion("Remote - Canada", EAST, { includeRemote: true }), false);
+  assert.equal(isInRegion("Remote (Europe)", EAST, { includeRemote: true }), false);
+});
+
+test("isInRegion: empty state list means no region limit", () => {
+  assert.ok(isInRegion("Seattle, WA", []));
+});
+
+// ── filterReason (used by npm run prune) ─────────────────────────────────────
+
+const API = {
+  blockedDomains: ["lensa.com"], regionStates: EAST, regionIncludeRemote: false,
+  excludedRoles: ["devops"], excludeClearance: true,
+};
+
+test("filterReason: passes an in-region, clean job", () => {
+  assert.equal(filterReason({ title: "Frontend Engineer", location: "Arlington, VA", url: "https://x.com" }, API), null);
+});
+
+test("filterReason: names the failing filter", () => {
+  assert.equal(filterReason({ title: "Dev", location: "Austin, TX" }, API), "out-of-region");
+  assert.equal(filterReason({ title: "DevOps Engineer", location: "Washington, DC" }, API), "excluded-role");
+  assert.equal(filterReason({ title: "Dev", location: "Washington, DC", description: "Public Trust required." }, API), "clearance");
+  assert.equal(filterReason({ title: "Dev", url: "https://www.lensa.com/j/1" }, API), "blocked-domain");
+});
+
+test("filterReason: keeps US remote when remote is included", () => {
+  assert.equal(filterReason({ title: "Frontend Engineer", location: "Remote" }, { ...API, regionIncludeRemote: true }), null);
+  assert.equal(filterReason({ title: "Frontend Engineer", location: "Remote" }, API), "out-of-region");
+});
+
+test("filterReason: unknown location (older rows) is not judged on region", () => {
+  assert.equal(filterReason({ title: "Frontend Engineer", location: null }, API), null);
 });
